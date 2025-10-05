@@ -5,6 +5,9 @@
 // - Historical actuals on all charts; bottom legend excludes High/Low items.
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
+
+// minimal helper for /views/query (env not touched)
+async function postJSON(u,b){ const r = await fetch(u,{method:"POST",headers:{ "Content-Type":"application/json"}, body: JSON.stringify(b)}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
 import { listForecastIds, queryView } from "../api.js";
 
 // ==== helpers ====
@@ -293,14 +296,7 @@ export default function DashboardTab2(){
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await queryView({
-        scope:"global", model:"", series:"",
-        forecast_id: String(forecastId),
-        date_from: ymd(preRollStart),
-        date_to: ymd(end),
-        page:1, page_size: 20000
-      });
-
+      const res = await postJSON("/views/query", { forecast_name: String(forecastId), month: startMonth.slice(0,7), span: Number(monthsCount) });
       const byDate = new Map();
       for (const r of (res.rows||[])){
         if (!r || !r.date) continue;
