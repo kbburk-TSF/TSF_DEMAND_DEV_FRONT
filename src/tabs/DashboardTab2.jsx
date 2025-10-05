@@ -6,9 +6,23 @@
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
 
+// backend base from Connect tab (stored in localStorage)
+const BASE = (typeof localStorage !== "undefined" ? (localStorage.getItem("backend_url") || "") : "").replace(/\/+$/,"");
+const BASE_VIEWS = BASE ? (BASE + "/views") : "/views";
+
+// --- compatibility glue: preserve old call names, only swap SQL endpoints ---
+async function listForecastIds(){
+  const r = await fetch(BASE_VIEWS + "/forecasts");
+  if (!r.ok) throw new Error(await r.text());
+  const arr = await r.json();
+  // old UI expects [{id,name}], map forecast_name -> both
+  return (Array.isArray(arr) ? arr : []).map(v => ({ id: String(v), name: String(v) }));
+}
+
+
 // --- endpoint glue (match backend/routes/views.py) ---
-async function getJSON(u){ const r = await fetch(u); if(!r.ok) throw new Error(await r.text()); return r.json(); }
-async function postJSON(u,b){ const r = await fetch(u,{method:"POST", headers:{ "Content-Type":"application/json"}, body: JSON.stringify(b)}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
+async function getJSON(u){ const url = u.startsWith("http")?u:(BASE_VIEWS + u); const r = await fetch(url); if(!r.ok) throw new Error(await r.text()); return r.json(); }
+async function postJSON(u,b){ const url = u.startsWith("http")?u:(BASE_VIEWS + u); const r = await fetch(url,{method:"POST", headers:{ "Content-Type":"application/json"}, body: JSON.stringify(b)}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
 
 
 // ==== helpers ====
@@ -298,7 +312,7 @@ export default function DashboardTab2(){
     const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
     const payload = { forecast_name: String(forecastId), month: startMonth.slice(0,7), span: Number(monthsCount) };
-    const res = await postJSON("/views/query", payload);
+    const res = await postJSON("/query", payload);
 
     const byDate = new Map();
     for (const r of (res.rows||[])){
