@@ -1,45 +1,45 @@
-import { API_BASE } from "./env.js";
+// src/tabs/api.js
+// Endpoint glue ONLY — no UI logic changed.
+// Points to FastAPI routes defined in backend/routes/views.py
+//  - GET  /views/forecasts           -> string[] of forecast_name
+//  - GET  /views/months?forecast_name -> string[] of YYYY-MM
+//  - POST /views/query { forecast_name, month:"YYYY-MM", span:1|2|3 } -> { rows: [...] }
 
-export async function health(){
-  const r = await fetch((API_BASE || "") + "/health");
-  if(!r.ok) throw new Error("HTTP " + r.status);
+async function getJSON(url){
+  const r = await fetch(url, { credentials: "same-origin" });
+  if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
 
-export async function loadClassicalOptions(){
-  const r = await fetch((API_BASE || "") + "/forms/classical", { headers: { "Accept": "text/html" } });
-  if(!r.ok) throw new Error("HTTP " + r.status);
-  const html = await r.text();
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-  const paramSel = doc.querySelector('select[name="parameter"], select#parameter, select#param');
-  const stateSel = doc.querySelector('select[name="state"], select#state');
-  const params = paramSel ? Array.from(paramSel.options).map(o => o.value).filter(Boolean) : [];
-  const states = stateSel ? Array.from(stateSel.options).map(o => o.value).filter(Boolean) : [];
-  return { params, states };
-}
-
-/* ---------- Views API ---------- */
-
-export async function fetchViewsMeta(){
-  const r = await fetch((API_BASE || "") + "/views/meta");
-  if(!r.ok) throw new Error("HTTP " + r.status);
-  return r.json(); // { scopes, models, series, most_recent? }
-}
-
-export async function listForecastIds({ scope, model, series }){
-  const q = new URLSearchParams({ scope, model: model || "", series: series || "" });
-  const r = await fetch((API_BASE || "") + "/views/ids?" + q.toString());
-  if(!r.ok) throw new Error("HTTP " + r.status);
-  return r.json(); // ["uuid", ...] newest-first
-}
-
-export async function queryView({ scope, model, series, forecast_id, date_from, date_to, page = 1, page_size = 2000 }){
-  const r = await fetch((API_BASE || "") + "/views/query", {
+async function postJSON(url, body){
+  const r = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ scope, model, series, forecast_id, date_from, date_to, page, page_size })
+    credentials: "same-origin",
+    body: JSON.stringify(body || {}),
   });
-  if(!r.ok) throw new Error("HTTP " + r.status);
-  return r.json(); // { rows, total }
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
 }
+
+// ---- Public API (do not change call sites) ----
+export async function getForecasts(){
+  return getJSON("/views/forecasts");           // -> string[]
+}
+
+export async function getMonths(forecast_name){
+  const q = encodeURIComponent(forecast_name ?? "");
+  return getJSON(`/views/months?forecast_name=${q}`);  // -> string[] "YYYY-MM"
+}
+
+export async function runQuery({ forecast_name, month, span }){
+  // month = "YYYY-MM"; span = 1|2|3
+  return postJSON("/views/query", { forecast_name, month, span });
+}
+
+// Optionally default export to keep older imports happy
+export default {
+  getForecasts,
+  getMonths,
+  runQuery,
+};
