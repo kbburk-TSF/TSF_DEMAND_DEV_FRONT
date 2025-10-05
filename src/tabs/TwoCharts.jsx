@@ -1,11 +1,13 @@
-// src/tabs/DashboardTab2.jsx
-// Derived from DashboardTab.jsx (2025-09-27):
-// - Shows only Chart 1 (Classical) and Chart 3 (Gold Line & Green Zone).
-// - Uses the exact same configurations, sizing, legends, and shared Y-axis domain logic.
-// - Historical actuals on all charts; bottom legend excludes High/Low items.
+// src/tabs/TwoCharts.jsx
+// Endpoints update (2025-10-05):
+// - Removed dependency on ../api.js
+// - Uses /views/forecasts, /views/months, /views/query from FastAPI
+// - Maps ci90_low/ci90_high to low/high for chart compatibility
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
-import { listForecastIds, queryView } from "../api.js";
+
+async function getJSON(u){ const r = await fetch(u); if (!r.ok) throw new Error(await r.text()); return r.json(); }
+async function postJSON(u,b){ const r = await fetch(u,{method:"POST",headers:{ "Content-Type":"application/json"}, body: JSON.stringify(b)}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
 
 // ==== helpers ====
 const MS_DAY = 86400000;
@@ -17,7 +19,6 @@ function addMonthsUTC(d, n){ return new Date(Date.UTC(d.getUTCFullYear(), d.getU
 function fmtMDY(s){ const d=parseYMD(s); const mm=d.getUTCMonth()+1, dd=d.getUTCDate(), yy=String(d.getUTCFullYear()).slice(-2); return `${mm}/${dd}/${yy}`; }
 function daysBetweenUTC(a,b){ const out=[]; let t=a.getTime(); while (t<=b.getTime()+1e-3){ out.push(ymd(new Date(t))); t+=MS_DAY; } return out; }
 
-// Hook: measure container width (and re-render on resize)
 function useContainerWidth(){
   const ref = useRef(null);
   const [w, setW] = useState(0);
@@ -38,13 +39,12 @@ function useContainerWidth(){
   return [ref, w];
 }
 
-// Shared chart math
 function useChartMath(rows){
   const [wrapRef, W] = useContainerWidth();
-  const H = Math.max(220, Math.min(340, Math.round(W * 0.22))); // shorter responsive height (same as DashboardTab)
+  const H = Math.max(220, Math.min(340, Math.round(W * 0.22)));
   const pad = { top: 28, right: 24, bottom: 72, left: 70 };
   const N = (rows||[]).length;
-  const startIdx = 7; // preroll days
+  const startIdx = 7;
 
   const innerW = Math.max(1, W - pad.left - pad.right);
   const innerH = Math.max(1, H - pad.top - pad.bottom);
@@ -61,21 +61,11 @@ function useChartMath(rows){
   return { wrapRef, W, H, pad, xScale, innerW, innerH, startIdx, niceTicks };
 }
 
-// Legend component — boxed, centered, horizontal
 function InlineLegend({ items }){
   if (!items || !items.length) return null;
   return (
     <div style={{display:"flex", justifyContent:"center", marginTop:12}}>
-      <div style={{
-        display:"inline-flex",
-        flexWrap:"wrap",
-        gap:"16px",
-        alignItems:"center",
-        padding:"12px 16px",
-        border:"2pt solid #333",
-        borderRadius:8,
-        background:"#fff"
-      }}>
+      <div style={{ display:"inline-flex", flexWrap:"wrap", gap:"16px", alignItems:"center", padding:"12px 16px", border:"2pt solid #333", borderRadius:8, background:"#fff" }}>
         {items.map((it,idx)=>{
           if (it.type === "line"){
             return (
@@ -98,7 +88,6 @@ function InlineLegend({ items }){
   );
 }
 
-// ==== Multi-series classical chart ====
 function MultiClassicalChart({ rows, yDomain }){
   if (!rows || !rows.length) return null;
   const { wrapRef, W, H, pad, xScale, innerW, innerH, startIdx, niceTicks } = useChartMath(rows);
@@ -166,7 +155,6 @@ function MultiClassicalChart({ rows, yDomain }){
   );
 }
 
-// ==== GOLD + GREEN ZONE chart ====
 function GoldAndGreenZoneChart({ rows, yDomain }){
   if (!rows || !rows.length) return null;
   const { wrapRef, W, H, pad, xScale, innerW, innerH, startIdx, niceTicks } = useChartMath(rows);
@@ -235,18 +223,17 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
   );
 }
 
-// Section wrapper with explicit side padding
 function ChartSection({ title, children, mt=16 }){
   return (
     <section style={{ marginTop: mt, paddingLeft: 32, paddingRight: 32 }}>
-{children}
+      {children}
     </section>
   );
 }
 
 export default function TwoCharts(){
-  const [ids, setIds] = useState([]);
-  const [forecastId, setForecastId] = useState("");
+  const [forecasts, setForecasts] = useState([]);
+  const [forecastName, setForecastName] = useState("");
   const [allMonths, setAllMonths] = useState([]);
   const [startMonth, setStartMonth] = useState("");
   const [monthsCount, setMonthsCount] = useState(1);
@@ -256,55 +243,41 @@ export default function TwoCharts(){
   useEffect(() => {
     (async () => {
       try {
-        const list = await listForecastIds({ scope:"global", model:"", series:"" });
-        const norm = (Array.isArray(list) ? list : []).map(x => (
-          typeof x === "string" ? { id:x, name:x }
-          : { id:String(x.id ?? x.value ?? x), name:String(x.name ?? x.label ?? x.id ?? x) }
-        ));
-        setIds(norm);
-        if (norm.length) setForecastId(norm[0].id);
+        const list = await getJSON("/views/forecasts");
+        setForecasts(list);
+        if (list.length) setForecastName(list[0]);
       } catch(e){ setStatus("Could not load forecasts: " + String(e.message||e)); }
     })();
   }, []);
 
   useEffect(() => {
-    if (!forecastId) return;
+    if (!forecastName) return;
     (async () => {
       try {
-        setStatus("Scanning dates…");
-        const res = await queryView({ scope:"global", model:"", series:"", forecast_id: forecastId, date_from:null, date_to:null, page:1, page_size:20000 });
-        const dates = Array.from(new Set((res.rows||[]).map(r => r?.date).filter(Boolean))).sort();
-        const months = Array.from(new Set(dates.map(s => s.slice(0,7)))).sort();
+        setStatus("Scanning months…");
+        const months = await getJSON("/views/months?forecast_name=" + encodeURIComponent(forecastName));
         setAllMonths(months);
         if (months.length) setStartMonth(months[0] + "-01");
         setStatus("");
-      } catch(e){ setStatus("Failed to scan dates: " + String(e.message||e)); }
+      } catch(e){ setStatus("Failed to load months: " + String(e.message||e)); }
     })();
-  }, [forecastId]);
+  }, [forecastName]);
 
   const monthOptions = useMemo(() => allMonths.map(m => ({ value: m+"-01", label: m })), [allMonths]);
 
   async function run(){
-    if (!forecastId || !startMonth) return;
+    if (!forecastName || !startMonth) return;
     try{
       setStatus("Loading…");
       const start = firstOfMonthUTC(parseYMD(startMonth));
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await queryView({
-        scope:"global", model:"", series:"",
-        forecast_id: String(forecastId),
-        date_from: ymd(preRollStart),
-        date_to: ymd(end),
-        page:1, page_size: 20000
-      });
+      const payload = { forecast_name: String(forecastName), month: startMonth.slice(0,7), span: monthsCount };
+      const res = await postJSON("/views/query", payload);
 
       const byDate = new Map();
-      for (const r of (res.rows||[])){
-        if (!r || !r.date) continue;
-        byDate.set(r.date, r);
-      }
+      for (const r of (res.rows||[])){ if (r && r.date) byDate.set(r.date, r); }
       const days = daysBetweenUTC(preRollStart, end);
       const strict = days.map(d => {
         const r = byDate.get(d) || {};
@@ -312,8 +285,8 @@ export default function TwoCharts(){
           date: d,
           value: r.value ?? null,
           fv: r.fv ?? null,
-          low: r.low ?? null,
-          high: r.high ?? null,
+          low: r.ci90_low ?? null,
+          high: r.ci90_high ?? null,
           ARIMA_M: r.ARIMA_M ?? null,
           HWES_M:  r.HWES_M  ?? null,
           SES_M:   r.SES_M   ?? null
@@ -338,8 +311,8 @@ export default function TwoCharts(){
       <div className="row" style={{alignItems:"end", flexWrap:"wrap"}}>
         <div>
           <label>Forecast (forecast_name)</label><br/>
-          <select className="input" value={forecastId} onChange={e=>setForecastId(e.target.value)}>
-            {ids.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+          <select className="input" value={forecastName} onChange={e=>setForecastName(e.target.value)}>
+            {forecasts.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </div>
         <div>
@@ -362,11 +335,11 @@ export default function TwoCharts(){
         <div className="muted" style={{marginLeft:12}}>{status}</div>
       </div>
 
-      <ChartSection title="Classical Forecasts (ARIMA, SES, HWES)" mt={16}>
+      <ChartSection mt={16}>
         <MultiClassicalChart rows={rows} yDomain={sharedYDomain} />
       </ChartSection>
 
-      <ChartSection title="Targeted Seasonal Forecast (Gold Line & Green Zone)" mt={24}>
+      <ChartSection mt={24}>
         <GoldAndGreenZoneChart rows={rows} yDomain={sharedYDomain} />
       </ChartSection>
     </div>

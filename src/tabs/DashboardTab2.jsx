@@ -1,11 +1,14 @@
-// src/tabs/DashboardTab2.jsx
-// Derived from DashboardTab.jsx (2025-09-27):
-// - Shows only Chart 1 (Classical) and Chart 3 (Gold Line & Green Zone).
-// - Uses the exact same configurations, sizing, legends, and shared Y-axis domain logic.
-// - Historical actuals on all charts; bottom legend excludes High/Low items.
+// src/tabs/DashboardTab.jsx
+// Endpoints update (2025-10-05):
+// - Removed dependency on ../api.js
+// - Uses /views/forecasts, /views/months, /views/query from FastAPI (see backend/routes/views.py)
+// - Maps ci90_low/ci90_high to low/high for chart compatibility
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
-import { listForecastIds, queryView } from "../api.js";
+
+// --- tiny fetch helpers ---
+async function getJSON(u){ const r = await fetch(u); if (!r.ok) throw new Error(await r.text()); return r.json(); }
+async function postJSON(u,b){ const r = await fetch(u,{method:"POST",headers:{ "Content-Type":"application/json"}, body: JSON.stringify(b)}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
 
 // ==== helpers ====
 const MS_DAY = 86400000;
@@ -41,7 +44,7 @@ function useContainerWidth(){
 // Shared chart math
 function useChartMath(rows){
   const [wrapRef, W] = useContainerWidth();
-  const H = Math.max(220, Math.min(340, Math.round(W * 0.22))); // shorter responsive height (same as DashboardTab)
+  const H = Math.max(220, Math.min(340, Math.round(W * 0.22))); // shorter responsive height
   const pad = { top: 28, right: 24, bottom: 72, left: 70 };
   const N = (rows||[]).length;
   const startIdx = 7; // preroll days
@@ -66,16 +69,7 @@ function InlineLegend({ items }){
   if (!items || !items.length) return null;
   return (
     <div style={{display:"flex", justifyContent:"center", marginTop:12}}>
-      <div style={{
-        display:"inline-flex",
-        flexWrap:"wrap",
-        gap:"16px",
-        alignItems:"center",
-        padding:"12px 16px",
-        border:"2pt solid #333",
-        borderRadius:8,
-        background:"#fff"
-      }}>
+      <div style={{ display:"inline-flex", flexWrap:"wrap", gap:"16px", alignItems:"center", padding:"12px 16px", border:"2pt solid #333", borderRadius:8, background:"#fff" }}>
         {items.map((it,idx)=>{
           if (it.type === "line"){
             return (
@@ -166,7 +160,64 @@ function MultiClassicalChart({ rows, yDomain }){
   );
 }
 
-// ==== GOLD + GREEN ZONE chart ====
+// ==== GOLD ONLY ====
+function GoldChart({ rows, yDomain }){
+  if (!rows || !rows.length) return null;
+  const { wrapRef, W, H, pad, xScale, innerW, innerH, startIdx, niceTicks } = useChartMath(rows);
+
+  let Y0, Y1;
+  if (yDomain && Number.isFinite(yDomain[0]) && Number.isFinite(yDomain[1])){
+    [Y0, Y1] = yDomain;
+  } else {
+    const yVals = rows.flatMap(r => [r.value, r.fv]).filter(v => v!=null).map(Number);
+    const yMin = yVals.length ? Math.min(...yVals) : 0;
+    const yMax = yVals.length ? Math.max(...yVals) : 1;
+    const yPad = (yMax - yMin) * 0.08 || 1;
+    Y0 = yMin - yPad; Y1 = yMax + yPad;
+  }
+  const yScale = v => pad.top + innerH * (1 - ((v - Y0) / Math.max(1e-9, (Y1 - Y0))));
+  const path = pts => pts.length ? pts.map((p,i)=>(i?"L":"M")+xScale(p.i)+" "+yScale(p.y)).join(" ") : "";
+
+  const histActualPts = rows.map((r,i) => (r.value!=null && i < startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
+  const futActualPts  = rows.map((r,i) => (r.value!=null && i >= startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
+  const fvPts         = rows.map((r,i) => (r.fv!=null    && i >= startIdx) ? { i, y:Number(r.fv) }    : null).filter(Boolean);
+  const yTicks = niceTicks(Y0, Y1, 6);
+  const fvColor = "#FFD700";
+
+  const legendItems = [
+    { label: "Historical Values", type: "line", stroke:"#000", dash:null, width:1.8 },
+    { label: "Actuals (for comparison)", type: "line", stroke:"#000", dash:"4,6", width:2.4 },
+    { label: "Targeted Seasonal Forecast", type: "line", stroke:fvColor, dash:null, width:2.4 },
+  ];
+
+  return (
+    <div ref={wrapRef} style={{ width: "100%" }}>
+      <svg width={W} height={H} style={{ display:"block", width:"100%" }}>
+        <line x1={pad.left} y1={H-pad.bottom} x2={W-pad.right} y2={H-pad.bottom} stroke="#999"/>
+        <line x1={pad.left} y1={pad.top} x2={pad.left} y2={H-pad.bottom} stroke="#999"/>
+        {yTicks.map((v,i)=>(
+          <g key={i}>
+            <line x1={pad.left-5} y1={yScale(v)} x2={W-pad.right} y2={yScale(v)} stroke="#eee"/>
+            <text x={pad.left-10} y={yScale(v)+4} fontSize="11" fill="#666" textAnchor="end">{v}</text>
+          </g>
+        ))}
+        <rect x={xScale(0)} y={pad.top} width={Math.max(0, xScale(7)-xScale(0))} height={H-pad.top-pad.bottom} fill="rgba(0,0,0,0.08)"/>
+        <path d={path(histActualPts)} fill="none" stroke="#000" strokeWidth={1.8}/>
+        <path d={path(futActualPts)}  fill="none" stroke="#000" strokeWidth={2.4} strokeDasharray="4,6"/>
+        <path d={path(fvPts)}         fill="none" stroke={fvColor} strokeWidth={2.4}/>
+        {rows.map((r,i)=>(
+          <g key={i} transform={`translate(${xScale(i)}, ${H-pad.bottom})`}>
+            <line x1={0} y1={0} x2={0} y2={6} stroke="#aaa"/>
+            <text x={10} y={0} fontSize="11" fill="#666" transform="rotate(90 10 0)" textAnchor="start">{fmtMDY(r.date)}</text>
+          </g>
+        ))}
+      </svg>
+      <InlineLegend items={legendItems} />
+    </div>
+  );
+}
+
+// ==== GOLD + GREEN ZONE ====
 function GoldAndGreenZoneChart({ rows, yDomain }){
   if (!rows || !rows.length) return null;
   const { wrapRef, W, H, pad, xScale, innerW, innerH, startIdx, niceTicks } = useChartMath(rows);
@@ -246,66 +297,55 @@ function ChartSection({ title, children, mt=16 }){
 }
 
 export default function DashboardTab2(){
-  const [ids, setIds] = useState([]);
-  const [forecastId, setForecastId] = useState("");
+  const [forecasts, setForecasts] = useState([]);
+  const [forecastName, setForecastName] = useState("");
   const [allMonths, setAllMonths] = useState([]);
   const [startMonth, setStartMonth] = useState("");
   const [monthsCount, setMonthsCount] = useState(1);
   const [rows, setRows] = useState([]);
   const [status, setStatus] = useState("");
 
+  // Load forecast_name list from /views/forecasts
   useEffect(() => {
     (async () => {
       try {
-        const list = await listForecastIds({ scope:"global", model:"", series:"" });
-        const norm = (Array.isArray(list) ? list : []).map(x => (
-          typeof x === "string" ? { id:x, name:x }
-          : { id:String(x.id ?? x.value ?? x), name:String(x.name ?? x.label ?? x.id ?? x) }
-        ));
-        setIds(norm);
-        if (norm.length) setForecastId(norm[0].id);
+        const list = await getJSON("/views/forecasts"); // array of forecast_name strings
+        setForecasts(list);
+        if (list.length) setForecastName(list[0]);
       } catch(e){ setStatus("Could not load forecasts: " + String(e.message||e)); }
     })();
   }, []);
 
+  // Load months for selected forecast_name
   useEffect(() => {
-    if (!forecastId) return;
+    if (!forecastName) return;
     (async () => {
       try {
-        setStatus("Scanning dates…");
-        const res = await queryView({ scope:"global", model:"", series:"", forecast_id: forecastId, date_from:null, date_to:null, page:1, page_size:20000 });
-        const dates = Array.from(new Set((res.rows||[]).map(r => r?.date).filter(Boolean))).sort();
-        const months = Array.from(new Set(dates.map(s => s.slice(0,7)))).sort();
+        setStatus("Scanning months…");
+        const months = await getJSON("/views/months?forecast_name=" + encodeURIComponent(forecastName));
         setAllMonths(months);
         if (months.length) setStartMonth(months[0] + "-01");
         setStatus("");
-      } catch(e){ setStatus("Failed to scan dates: " + String(e.message||e)); }
+      } catch(e){ setStatus("Failed to load months: " + String(e.message||e)); }
     })();
-  }, [forecastId]);
+  }, [forecastName]);
 
   const monthOptions = useMemo(() => allMonths.map(m => ({ value: m+"-01", label: m })), [allMonths]);
 
   async function run(){
-    if (!forecastId || !startMonth) return;
+    if (!forecastName || !startMonth) return;
     try{
       setStatus("Loading…");
       const start = firstOfMonthUTC(parseYMD(startMonth));
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await queryView({
-        scope:"global", model:"", series:"",
-        forecast_id: String(forecastId),
-        date_from: ymd(preRollStart),
-        date_to: ymd(end),
-        page:1, page_size: 20000
-      });
+      const payload = { forecast_name: String(forecastName), month: startMonth.slice(0,7), span: monthsCount };
+      const res = await postJSON("/views/query", payload);
 
+      // Map into continuous daily rows, preserving preroll + selected span
       const byDate = new Map();
-      for (const r of (res.rows||[])){
-        if (!r || !r.date) continue;
-        byDate.set(r.date, r);
-      }
+      for (const r of (res.rows||[])){ if (r && r.date) byDate.set(r.date, r); }
       const days = daysBetweenUTC(preRollStart, end);
       const strict = days.map(d => {
         const r = byDate.get(d) || {};
@@ -313,8 +353,8 @@ export default function DashboardTab2(){
           date: d,
           value: r.value ?? null,
           fv: r.fv ?? null,
-          low: r.low ?? null,
-          high: r.high ?? null,
+          low: r.ci90_low ?? null,
+          high: r.ci90_high ?? null,
           ARIMA_M: r.ARIMA_M ?? null,
           HWES_M:  r.HWES_M  ?? null,
           SES_M:   r.SES_M   ?? null
@@ -341,8 +381,8 @@ export default function DashboardTab2(){
       <div className="row" style={{alignItems:"end", flexWrap:"wrap"}}>
         <div>
           <label>Forecast (forecast_name)</label><br/>
-          <select className="input" value={forecastId} onChange={e=>setForecastId(e.target.value)}>
-            {ids.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+          <select className="input" value={forecastName} onChange={e=>setForecastName(e.target.value)}>
+            {forecasts.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </div>
         <div>
@@ -368,6 +408,10 @@ export default function DashboardTab2(){
       <ChartSection title="Classical Forecasts (ARIMA, SES, HWES)" mt={16}>
         <MultiClassicalChart rows={rows} yDomain={sharedYDomain} />
       </ChartSection>
+
+      // (Chart 2 removed in this tab) <div style={{display:'none'}}>
+        <GoldChart rows={rows} yDomain={sharedYDomain} />
+      </div>
 
       <ChartSection title="Targeted Seasonal Forecast (Gold Line & Green Zone)" mt={24}>
         <GoldAndGreenZoneChart rows={rows} yDomain={sharedYDomain} />
