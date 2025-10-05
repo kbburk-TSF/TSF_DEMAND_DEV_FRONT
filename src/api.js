@@ -1,45 +1,69 @@
-import { API_BASE } from "./env.js";
+// src/api.js — minimal shim to new /views endpoints ONLY.
+// No environment variables. Uses backend_url from localStorage if present.
 
-export async function health(){
-  const r = await fetch((API_BASE || "") + "/health");
-  if(!r.ok) throw new Error("HTTP " + r.status);
+function base() {
+  const b = (typeof localStorage !== "undefined" ? (localStorage.getItem("backend_url") || "") : "").replace(/\/+$/,"");
+  return b || "";
+}
+function url(path){ const b = base(); return (b ? (b + path) : path); }
+
+async function getJSON(path){
+  const r = await fetch(url(path), { credentials: "same-origin" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+async function postJSON(path, body){
+  const r = await fetch(url(path), {
+    method: "POST",
+    headers: { "Content-Type":"application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(body||{}),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
 
-export async function loadClassicalOptions(){
-  const r = await fetch((API_BASE || "") + "/forms/classical", { headers: { "Accept": "text/html" } });
-  if(!r.ok) throw new Error("HTTP " + r.status);
-  const html = await r.text();
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-  const paramSel = doc.querySelector('select[name="parameter"], select#parameter, select#param');
-  const stateSel = doc.querySelector('select[name="state"], select#state');
-  const params = paramSel ? Array.from(paramSel.options).map(o => o.value).filter(Boolean) : [];
-  const states = stateSel ? Array.from(stateSel.options).map(o => o.value).filter(Boolean) : [];
-  return { params, states };
+// ===== Public, backward-compatible surface =====
+
+// Older tabs call this with an options object we ignore.
+// We must return [{id,name}] even though /views/forecasts returns [string].
+export async function listForecastIds(/*opts*/){
+  const arr = await getJSON("/views/forecasts");
+  return (Array.isArray(arr) ? arr : []).map(v => ({ id: String(v), name: String(v) }));
 }
 
-/* ---------- Views API ---------- */
-
-export async function fetchViewsMeta(){
-  const r = await fetch((API_BASE || "") + "/views/meta");
-  if(!r.ok) throw new Error("HTTP " + r.status);
-  return r.json(); // { scopes, models, series, most_recent? }
+/**
+ * queryView(payload)
+ * Supports both the new payload { forecast_name, month:"YYYY-MM", span }
+ * and the old payload { forecast_id, date_from:"YYYY-MM-DD", date_to:"YYYY-MM-DD" }.
+ * In the old shape, we translate to month/span to hit /views/query.
+ */
+export async function queryView(payload){
+  if (!payload || typeof payload !== "object") payload = {};
+  // New shape straight-through
+  if (payload.forecast_name && payload.month){
+    return postJSON("/views/query", {
+      forecast_name: String(payload.forecast_name),
+      month: String(payload.month).slice(0,7),
+      span: Number(payload.span || 1)
+    });
+  }
+  // Old shape translation
+  if (payload.forecast_id && payload.date_from){
+    const fname = String(payload.forecast_id);
+    const m = String(payload.date_from).slice(0,7);
+    let span = 1;
+    if (payload.date_to){
+      const [y1,m1] = m.split("-").map(Number);
+      const m2 = String(payload.date_to).slice(0,7);
+      const [y2,m22] = m2.split("-").map(Number);
+      span = (y2 - y1) * 12 + (m22 - m1) + 1;
+      if (!Number.isFinite(span) || span < 1) span = 1;
+    }
+    return postJSON("/views/query", { forecast_name: fname, month: m, span });
+  }
+  // Fallback: try POSTing to /views/query with whatever fields we received.
+  return postJSON("/views/query", payload);
 }
 
-export async function listForecastIds({ scope, model, series }){
-  const q = new URLSearchParams({ scope, model: model || "", series: series || "" });
-  const r = await fetch((API_BASE || "") + "/views/ids?" + q.toString());
-  if(!r.ok) throw new Error("HTTP " + r.status);
-  return r.json(); // ["uuid", ...] newest-first
-}
-
-export async function queryView({ scope, model, series, forecast_id, date_from, date_to, page = 1, page_size = 2000 }){
-  const r = await fetch((API_BASE || "") + "/views/query", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ scope, model, series, forecast_id, date_from, date_to, page, page_size })
-  });
-  if(!r.ok) throw new Error("HTTP " + r.status);
-  return r.json(); // { rows, total }
-}
+export default { listForecastIds, queryView };
