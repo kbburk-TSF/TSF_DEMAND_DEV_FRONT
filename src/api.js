@@ -1,68 +1,45 @@
-// src/api.js — strict minimal update to match backend/routes/views.py
-// No env vars changed. No default export. Named exports only.
-// Base URL comes from Connect tab via localStorage('backend_url'); if absent, uses relative paths.
+import { API_BASE } from "./env.js";
 
-function viewsPath(p){
-  let base = "";
-  try {
-    base = (localStorage.getItem("backend_url") || "").replace(/\/+$/,"");
-  } catch(_) { base = ""; }
-  return base ? (base + "/views" + p) : ("/views" + p);
-}
-
-async function getJSON(path){
-  const r = await fetch(viewsPath(path), { credentials: "same-origin" });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+export async function health(){
+  const r = await fetch((API_BASE || "") + "/health");
+  if(!r.ok) throw new Error("HTTP " + r.status);
   return r.json();
 }
 
-async function postJSON(path, body){
-  const r = await fetch(viewsPath(path), {
+export async function loadClassicalOptions(){
+  const r = await fetch((API_BASE || "") + "/forms/classical", { headers: { "Accept": "text/html" } });
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  const html = await r.text();
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  const paramSel = doc.querySelector('select[name="parameter"], select#parameter, select#param');
+  const stateSel = doc.querySelector('select[name="state"], select#state');
+  const params = paramSel ? Array.from(paramSel.options).map(o => o.value).filter(Boolean) : [];
+  const states = stateSel ? Array.from(stateSel.options).map(o => o.value).filter(Boolean) : [];
+  return { params, states };
+}
+
+/* ---------- Views API ---------- */
+
+export async function fetchViewsMeta(){
+  const r = await fetch((API_BASE || "") + "/views/meta");
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  return r.json(); // { scopes, models, series, most_recent? }
+}
+
+export async function listForecastIds({ scope, model, series }){
+  const q = new URLSearchParams({ scope, model: model || "", series: series || "" });
+  const r = await fetch((API_BASE || "") + "/views/ids?" + q.toString());
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  return r.json(); // ["uuid", ...] newest-first
+}
+
+export async function queryView({ scope, model, series, forecast_id, date_from, date_to, page = 1, page_size = 2000 }){
+  const r = await fetch((API_BASE || "") + "/views/query", {
     method: "POST",
-    headers: { "Content-Type":"application/json" },
-    credentials: "same-origin",
-    body: JSON.stringify(body || {}),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scope, model, series, forecast_id, date_from, date_to, page, page_size })
   });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
-}
-
-// Keep original function names used by tabs:
-
-// returns [{ id, name }]
-export async function listForecastIds(/* opts */){
-  const arr = await getJSON("/forecasts");
-  return (Array.isArray(arr) ? arr : []).map(v => ({ id: String(v), name: String(v) }));
-}
-
-// Supports both old and new payload shapes
-export async function queryView(payload){
-  payload = payload || {};
-
-  // New shape: { forecast_name, month: 'YYYY-MM', span }
-  if (payload.forecast_name && payload.month){
-    return postJSON("/query", {
-      forecast_name: String(payload.forecast_name),
-      month: String(payload.month).slice(0,7),
-      span: Number(payload.span || 1),
-    });
-  }
-
-  // Old shape: { forecast_id, date_from:'YYYY-MM-DD', date_to:'YYYY-MM-DD' }
-  if (payload.forecast_id && payload.date_from){
-    const forecast_name = String(payload.forecast_id);
-    const month = String(payload.date_from).slice(0,7);
-    let span = 1;
-    if (payload.date_to){
-      const [y1,m1] = month.split("-").map(Number);
-      const mstr = String(payload.date_to).slice(0,7);
-      const [y2,m2] = mstr.split("-").map(Number);
-      const calc = (y2 - y1) * 12 + (m2 - m1) + 1;
-      if (Number.isFinite(calc) && calc >= 1) span = calc;
-    }
-    return postJSON("/query", { forecast_name, month, span });
-  }
-
-  // Fallback: pass through to /views/query
-  return postJSON("/query", payload);
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  return r.json(); // { rows, total }
 }
