@@ -5,25 +5,7 @@
 // - Historical actuals on all charts; bottom legend excludes High/Low items.
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
-
-// backend base from Connect tab (stored in localStorage)
-const BASE = (typeof localStorage !== "undefined" ? (localStorage.getItem("backend_url") || "") : "").replace(/\/+$/,"");
-const BASE_VIEWS = BASE ? (BASE + "/views") : "/views";
-
-// --- compatibility glue: preserve old call names, only swap SQL endpoints ---
-async function listForecastIds(){
-  const r = await fetch(BASE_VIEWS + "/forecasts");
-  if (!r.ok) throw new Error(await r.text());
-  const arr = await r.json();
-  // old UI expects [{id,name}], map forecast_name -> both
-  return (Array.isArray(arr) ? arr : []).map(v => ({ id: String(v), name: String(v) }));
-}
-
-
-// --- endpoint glue (match backend/routes/views.py) ---
-async function getJSON(u){ const url = u.startsWith("http")?u:(BASE_VIEWS + u); const r = await fetch(url); if(!r.ok) throw new Error(await r.text()); return r.json(); }
-async function postJSON(u,b){ const url = u.startsWith("http")?u:(BASE_VIEWS + u); const r = await fetch(url,{method:"POST", headers:{ "Content-Type":"application/json"}, body: JSON.stringify(b)}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
-
+import { listForecastIds, queryView } from "../api.js";
 
 // ==== helpers ====
 const MS_DAY = 86400000;
@@ -303,41 +285,46 @@ export default function TwoCharts(){
   const monthOptions = useMemo(() => allMonths.map(m => ({ value: m+"-01", label: m })), [allMonths]);
 
   async function run(){
-  if (!forecastId || !startMonth) return;
-  try{
-    setStatus("Loading…");
-    const start = firstOfMonthUTC(parseYMD(startMonth));
-    const preRollStart = new Date(start.getTime() - 7*MS_DAY);
-    const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
+    if (!forecastId || !startMonth) return;
+    try{
+      setStatus("Loading…");
+      const start = firstOfMonthUTC(parseYMD(startMonth));
+      const preRollStart = new Date(start.getTime() - 7*MS_DAY);
+      const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-    const payload = { forecast_name: String(forecastId), month: startMonth.slice(0,7), span: Number(monthsCount) };
-    const res = await postJSON("/query", payload);
+      const res = await queryView({
+        scope:"global", model:"", series:"",
+        forecast_id: String(forecastId),
+        date_from: ymd(preRollStart),
+        date_to: ymd(end),
+        page:1, page_size: 20000
+      });
 
-    const byDate = new Map();
-    for (const r of (res.rows||[])){
-      if (!r || !r.date) continue;
-      byDate.set(r.date, r);
-    }
-    const days = daysBetweenUTC(preRollStart, end);
-    const strict = days.map(d => {
-      const r = byDate.get(d) || {};
-      return {
-        date: d,
-        value: r.value ?? null,
-        fv: r.fv ?? null,
-        // map new column names -> expected keys
-        low:  (r.ci90_low  ?? r.low  ?? null),
-        high: (r.ci90_high ?? r.high ?? null),
-        ARIMA_M: r.ARIMA_M ?? null,
-        HWES_M:  r.HWES_M  ?? null,
-        SES_M:   r.SES_M   ?? null
-      };
-    });
-    setRows(strict);
-    setStatus("");
-  } catch(e){ setStatus(String(e.message||e)); }
-}
-const sharedYDomain = useMemo(()=>{
+      const byDate = new Map();
+      for (const r of (res.rows||[])){
+        if (!r || !r.date) continue;
+        byDate.set(r.date, r);
+      }
+      const days = daysBetweenUTC(preRollStart, end);
+      const strict = days.map(d => {
+        const r = byDate.get(d) || {};
+        return {
+          date: d,
+          value: r.value ?? null,
+          fv: r.fv ?? null,
+          low: r.ci90_low ?? r.low ?? null,
+          high: r.ci90_high ?? r.high ?? null,
+          ARIMA_M: r.ARIMA_M ?? null,
+          HWES_M:  r.HWES_M  ?? null,
+          SES_M:   r.SES_M   ?? null
+        };
+      });
+      setRows(strict);
+      setStatus("");
+    } catch(e){ setStatus(String(e.message||e)); }
+  }
+
+  const sharedYDomain = useMemo(()=>{
     if (!rows || !rows.length) return null;
     const vals = rows.flatMap(r => [r.value, r.low, r.high, r.fv]).filter(v => v!=null).map(Number);
     if (!vals.length) return null;
