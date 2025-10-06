@@ -81,8 +81,7 @@ function useChartMath(rows){
   const H = Math.max(220, Math.min(340, Math.round(W * 0.22))); // shorter responsive height
   const pad = { top: 28, right: 24, bottom: 72, left: 70 };
   const N = (rows||[]).length;
-  \1const histRows = Array.isArray(rows) ? histRows : [];
-// preroll days
+  const startIdx = 7; // preroll days
 
   const innerW = Math.max(1, W - pad.left - pad.right);
   const innerH = Math.max(1, H - pad.top - pad.bottom);
@@ -289,14 +288,14 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
   const bandBot = rows.map((r,i) => (r.ci95_low!=null && r.ci95_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci95_low))]  : null).filter(Boolean).reverse();
   const polyStr = [...bandTop, ...bandBot].map(([x,y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
   // ci90 polygon points
-  const band90Top = rows.map((r,i) => (r.ci85_low!=null && r.ci85_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci85_high))] : null).filter(Boolean);
-  const band90Bot = rows.map((r,i) => (r.ci85_low!=null && r.ci85_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci85_low))]  : null).filter(Boolean).reverse();
+  const band90Top = rows.map((r,i) => (r.ci90_low!=null && r.ci90_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci90_high))] : null).filter(Boolean);
+  const band90Bot = rows.map((r,i) => (r.ci90_low!=null && r.ci90_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci90_low))]  : null).filter(Boolean).reverse();
   const polyStr90 = [...band90Top, ...band90Bot].map(([x,y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
 // ci95 boundary line points
   const ci95HighPts = rows.map((r,i)=>(r.ci95_high!=null && i >= startIdx) ? { i, y:Number(r.ci95_high) } : null).filter(Boolean);
   const ci95LowPts  = rows.map((r,i)=>(r.ci95_low !=null && i >= startIdx) ? { i, y:Number(r.ci95_low)  } : null).filter(Boolean);
-  const ci90HighPts = rows.map((r,i)=>(r.ci85_high!=null && i >= startIdx) ? { i, y:Number(r.ci85_high) } : null).filter(Boolean);
-  const ci90LowPts  = rows.map((r,i)=>(r.ci85_low !=null && i >= startIdx) ? { i, y:Number(r.ci85_low)  } : null).filter(Boolean);
+  const ci90HighPts = rows.map((r,i)=>(r.ci90_high!=null && i >= startIdx) ? { i, y:Number(r.ci90_high) } : null).filter(Boolean);
+  const ci90LowPts  = rows.map((r,i)=>(r.ci90_low !=null && i >= startIdx) ? { i, y:Number(r.ci90_low)  } : null).filter(Boolean);
   const yTicks = niceTicks(Y0, Y1, 6);
 
   const intervalFill = "rgba(144,238,144,0.22)";
@@ -409,7 +408,7 @@ setStatus("");
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await __postQuery({ forecast_name:String(forecastId), month:String(startMonth).slice(0,7), span:Number(monthsCount), from: ymd(preRollStart), to: ymd(end), start_date: ymd(preRollStart), end_date: ymd(end) });
+      const res = await __postQuery({ forecast_name:String(forecastId), month:String(startMonth).slice(0,7), span:Number(monthsCount) });
 
       const byDate = new Map();
       for (const r of (res.rows||[])){
@@ -425,8 +424,8 @@ setStatus("");
           fv: r.fv ?? null,
           low: r.low ?? null,  ci95_low: r.ci95_low ?? null,
           ci95_high: r.ci95_high ?? null,
-          ci85_low: r.ci85_low ?? null,
-          ci85_high: r.ci85_high ?? null,
+          ci90_low: r.ci85_low ?? null,
+          ci90_high: r.ci85_high ?? null,
           ARIMA_M: r["ARIMA_M"] ?? null,
           HWES_M:  r["HWES_M"]  ?? null,
           SES_M:   r["SES_M"]   ?? null
@@ -438,18 +437,13 @@ setStatus("");
   }
 
   const sharedYDomain = useMemo(()=>{
-  if (!rows || !rows.length) return null;
-  const vals = rows.flatMap(r => [
-    r.value, r.fv, r.low, r.high,
-    r.ci95_low, r.ci95_high,
-    r.ci85_low, r.ci85_high,
-    r["ARIMA_M"], r["SES_M"], r["HWES_M"]
-  ]).filter(v => v!=null).map(Number);
-  if (!vals.length) return null;
-  const minv = Math.min(...vals), maxv = Math.max(...vals);
-  const pad = (maxv - minv) * 0.08 || 1;
-  return [minv - pad, maxv + pad];
-}, [rows]);
+    if (!rows || !rows.length) return null;
+    const vals = rows.flatMap(r => [r.ci95_low, r.ci95_high]).filter(v => v!=null).map(Number);
+    if (!vals.length) return null;
+    const minv = Math.min(...vals), maxv = Math.max(...vals);
+    const pad = (maxv - minv) * 0.08 || 1;
+    return [minv - pad, maxv + pad];
+  }, [rows]);
 
   return (
     <div style={{width:"100%"}}>
