@@ -1,11 +1,3 @@
-// Patched 2025-10-06 00:39
-// - Use absolute backend URL: https://tsf-demand-back.onrender.com
-// - Align with backend/routes/views.py endpoints:
-//   GET  /views/forecasts -> list of forecast_name (strings)
-//   GET  /views/months?forecast_name=... -> list of 'YYYY-MM'
-//   POST /views/query { forecast_name, month, span } -> rows
-// - No other changes to layout or charts.
-
 // src/tabs/DashboardTab.jsx
 // Clean rebuild (2025-09-27):
 // - Uses <ChartSection> to avoid mismatched divs and add explicit side padding.
@@ -19,11 +11,7 @@ import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "re
 
 // minimal helper for /views/query (env not touched)
 async function postJSON(u,b){ const r = await fetch(u,{method:"POST",headers:{ "Content-Type":"application/json"}, body: JSON.stringify(b)}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
-
-const BACKEND = "https://tsf-demand-back.onrender.com";
-async function getJSON(u){ const r = await fetch(u); if(!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }
-async function postJSON(u,b){ const r = await fetch(u,{method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(b)}); if(!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }
-
+import { listForecastIds, queryView, postJSON } from "../api.js";
 
 // ==== helpers ====
 const MS_DAY = 86400000;
@@ -332,8 +320,11 @@ export default function DashboardTab(){
   useEffect(() => {
     (async () => {
       try {
-        const list = await getJSON(`${BACKEND}/views/forecasts`);
-        const norm = (Array.isArray(list) ? list : []).map(x => ({ id: String(x), name: String(x) }));
+        const list = await listForecastIds({ scope:"global", model:"", series:"" });
+        const norm = (Array.isArray(list) ? list : []).map(x => (
+          typeof x === "string" ? { id:x, name:x }
+          : { id:String(x.id ?? x.value ?? x), name:String(x.name ?? x.label ?? x.id ?? x) }
+        ));
         setIds(norm);
         if (norm.length) setForecastId(norm[0].id);
       } catch(e){ setStatus("Could not load forecasts: " + String(e.message||e)); }
@@ -345,7 +336,9 @@ export default function DashboardTab(){
     (async () => {
       try {
         setStatus("Scanning dates…");
-        const months = await getJSON(`${BACKEND}/views/months?forecast_name=${'${'}encodeURIComponent(forecastId){'}'}`);
+        const res = await queryView({ scope:"global", model:"", series:"", forecast_id: forecastId, date_from:null, date_to:null, page:1, page_size:20000 });
+        const dates = Array.from(new Set((res.rows||[]).map(r => r?.date).filter(Boolean))).sort();
+        const months = Array.from(new Set(dates.map(s => s.slice(0,7)))).sort();
         setAllMonths(months);
         if (months.length) setStartMonth(months[0] + "-01");
         setStatus("");
@@ -363,7 +356,7 @@ export default function DashboardTab(){
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await postJSON(`${BACKEND}/views/query`, { forecast_name: String(forecastId), month: startMonth.slice(0,7), span: Number(monthsCount) });
+      const res = await postJSON("/views/query", { forecast_name: String(forecastId), month: startMonth.slice(0,7), span: Number(monthsCount) });
       const byDate = new Map();
       for (const r of (res.rows||[])){
         if (!r || !r.date) continue;
