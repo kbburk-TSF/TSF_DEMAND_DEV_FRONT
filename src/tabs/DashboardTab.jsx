@@ -438,10 +438,32 @@ setStatus("");
 
   const sharedYDomain = useMemo(()=>{
     if (!rows || !rows.length) return null;
-    const vals = rows.flatMap(r => [r.ci95_low, r.ci95_high]).filter(v => v!=null).map(Number);
-    if (!vals.length) return null;
-    const minv = Math.min(...vals), maxv = Math.max(...vals);
-    const pad = (maxv - minv) * 0.08 || 1;
+    const PREROLL = 7;
+
+    // Explicitly include the first 7 actuals (pre-roll)
+    const preRollActuals = rows
+      .slice(0, PREROLL)
+      .map(r => r?.value)
+      .filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)))
+      .map(Number);
+
+    // Include ALL actuals too (safety net if pre-roll has gaps)
+    const allActuals = rows
+      .map(r => r?.value)
+      .filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)))
+      .map(Number);
+
+    // Include CI95 bounds anywhere they exist
+    const ciBounds = rows.flatMap(r => [r?.ci95_low, r?.ci95_high])
+      .filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)))
+      .map(Number);
+
+    const domainVals = [...ciBounds, ...allActuals, ...preRollActuals];
+    if (!domainVals.length) return null;
+
+    const minv = Math.min(...domainVals);
+    const maxv = Math.max(...domainVals);
+    const pad = (maxv - minv) * 0.08 || 1; // keep 8% padding; at least 1
     return [minv - pad, maxv + pad];
   }, [rows]);
 
