@@ -288,14 +288,14 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
   const bandBot = rows.map((r,i) => (r.ci95_low!=null && r.ci95_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci95_low))]  : null).filter(Boolean).reverse();
   const polyStr = [...bandTop, ...bandBot].map(([x,y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
   // ci90 polygon points
-  const band90Top = rows.map((r,i) => (r.ci90_low!=null && r.ci90_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci90_high))] : null).filter(Boolean);
-  const band90Bot = rows.map((r,i) => (r.ci90_low!=null && r.ci90_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci90_low))]  : null).filter(Boolean).reverse();
+  const band90Top = rows.map((r,i) => (r.ci85_low!=null && r.ci85_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci85_high))] : null).filter(Boolean);
+  const band90Bot = rows.map((r,i) => (r.ci85_low!=null && r.ci85_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci85_low))]  : null).filter(Boolean).reverse();
   const polyStr90 = [...band90Top, ...band90Bot].map(([x,y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
 // ci95 boundary line points
   const ci95HighPts = rows.map((r,i)=>(r.ci95_high!=null && i >= startIdx) ? { i, y:Number(r.ci95_high) } : null).filter(Boolean);
   const ci95LowPts  = rows.map((r,i)=>(r.ci95_low !=null && i >= startIdx) ? { i, y:Number(r.ci95_low)  } : null).filter(Boolean);
-  const ci90HighPts = rows.map((r,i)=>(r.ci90_high!=null && i >= startIdx) ? { i, y:Number(r.ci90_high) } : null).filter(Boolean);
-  const ci90LowPts  = rows.map((r,i)=>(r.ci90_low !=null && i >= startIdx) ? { i, y:Number(r.ci90_low)  } : null).filter(Boolean);
+  const ci90HighPts = rows.map((r,i)=>(r.ci85_high!=null && i >= startIdx) ? { i, y:Number(r.ci85_high) } : null).filter(Boolean);
+  const ci90LowPts  = rows.map((r,i)=>(r.ci85_low !=null && i >= startIdx) ? { i, y:Number(r.ci85_low)  } : null).filter(Boolean);
   const yTicks = niceTicks(Y0, Y1, 6);
 
   const intervalFill = "rgba(144,238,144,0.22)";
