@@ -6,57 +6,44 @@
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
 
-// ---- Local backend helpers (no api.js) ----
-import { API_BASE } from "../env.js"; // optional
+// BACKEND resolver (in case it's missing)
+import { API_BASE } from "../env.js";
 const BACKEND = (
+
+// --- robust query poster (accepts many input shapes) ---
+async function __postQuery(body){
+  const b = body || {};
+  const forecast_name = String(
+    b.forecast_name ?? b.forecastName ?? b.forecast ?? b.name ?? b.id ?? b.forecast_id ?? b.forecastId ?? ""
+  );
+  const rawMonth = String(
+    b.month ?? b.startMonth ?? b.start_month ?? b.start ?? b.from ?? ""
+  );
+  const month = rawMonth ? rawMonth.slice(0,7) : "";
+  const span = Number(b.span ?? b.monthsCount ?? b.months ?? b.count ?? 1);
+
+  if (!forecast_name || !month) {
+    throw new Error("HTTP 400: normalized forecast_name and month are required");
+  }
+
+  const r = await fetch(`${BACKEND}/views/query`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ forecast_name, month, span })
+  });
+  if (!r.ok) {
+    let t = ""; try { t = await r.text(); } catch {}
+    throw new Error(`HTTP ${r.status}${t ? (": " + t) : ""}`);
+  }
+  return r.json();
+}
+
   (typeof window !== "undefined" && window.__BACKEND_URL__) ||
   (typeof API_BASE !== "undefined" && API_BASE) ||
   "https://tsf-demand-back.onrender.com"
 ).replace(/\/$/, "");
 
-async function _handle(res){
-  if(!res.ok){
-    let t=""; try{ t = await res.text(); } catch{}
-    throw new Error(`HTTP ${res.status}${t ? (": " + t) : ""}`);
-  }
-  return res.json();
-}
-async function httpGet(p){ return _handle(await fetch(`${BACKEND}${p}`)); }
-async function httpPost(p, body){
-  return _handle(await fetch(`${BACKEND}${p}`, {
-    method:"POST", headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify(body||{})
-  }));
-}
-
-async function listForecastIds(){
-  // Try multiple endpoints so we don't 404.
-  let lastErr;
-  for (const path of ["/views/forecasts", "/views/forecast_names", "/views/list"]) {
-    try {
-      const data = await httpGet(path);
-      return (Array.isArray(data) ? data : []).map(String).filter(Boolean);
-    } catch(e){ lastErr = e; }
-  }
-  throw lastErr || new Error("Could not load forecast list");
-}
-async function listMonths(forecast_name){
-  const q = encodeURIComponent(String(forecast_name||""));
-  try {
-    return await httpGet(`/views/months?forecast_name=${q}`);
-  } catch(e){
-    // fallback to id param, if backend uses it
-    return await httpGet(`/views/months?forecast_id=${q}`);
-  }
-}
-async function __postQuery({ forecast_name, month, span }){
-  return await httpPost("/views/query", {
-    forecast_name: String(forecast_name||""),
-    month: String(month||"").slice(0,7),
-    span: Number(span||1)
-  });
-}
-
+import { listForecastIds, queryView } from "../api.js";
 
 // ==== helpers ====
 const MS_DAY = 86400000;
@@ -308,7 +295,7 @@ export default function DashboardTab2(){
   useEffect(() => {
     (async () => {
       try {
-        const list = await listForecastIds();
+        const list = await listForecastIds({ scope:"global", model:"", series:"" });
         const norm = (Array.isArray(list) ? list : []).map(x => (
           typeof x === "string" ? { id:x, name:x }
           : { id:String(x.id ?? x.value ?? x), name:String(x.name ?? x.label ?? x.id ?? x) }
@@ -323,11 +310,13 @@ export default function DashboardTab2(){
     if (!forecastId) return;
     (async () => {
       try {
-        setStatus("Loading months…");
-const months = await listMonths(forecastId);
-setAllMonths(months||[]);
-if ((months||[]).length) setStartMonth(String(months[0]) + "-01");
-setStatus("");
+        setStatus("Scanning dates…");
+        const res = await __postQuery({ scope:"global", model:"", series:"", forecast_id: forecastId, date_from:null, date_to:null, page:1, page_size:20000 });
+        const dates = Array.from(new Set((res.rows||[]).map(r => r?.date).filter(Boolean))).sort();
+        const months = Array.from(new Set(dates.map(s => s.slice(0,7)))).sort();
+        setAllMonths(months);
+        if (months.length) setStartMonth(months[0] + "-01");
+        setStatus("");
       } catch(e){ setStatus("Failed to scan dates: " + String(e.message||e)); }
     })();
   }, [forecastId]);
@@ -360,13 +349,13 @@ setStatus("");
         const r = byDate.get(d) || {};
         return {
           date: d,
-          value: r.value ?? r.Value ?? null,
-          fv: r.fv ?? r.FV ?? r.forecast_value ?? null,
-          low: r.low ?? r.Low ?? r.lower ?? r.lower_bound ?? null,
-          high: r.high ?? r.High ?? r.upper ?? r.upper_bound ?? null,
-          ARIMA_M: r.ARIMA_M ?? r.arima_m ?? r.ARIMA ?? r.arima ?? null,
-          HWES_M:  r.HWES_M  ?? r.hwes_m  ?? r.HWES  ?? r.hwes  ?? null,
-          SES_M:   r.SES_M   ?? r.ses_m   ?? r.SES   ?? r.ses   ?? null
+          value: r.value ?? null,
+          fv: r.fv ?? null,
+          low: r.low ?? null,
+          high: r.high ?? null,
+          ARIMA_M: r.ARIMA_M ?? null,
+          HWES_M:  r.HWES_M  ?? null,
+          SES_M:   r.SES_M   ?? null
         };
       });
       setRows(strict);
