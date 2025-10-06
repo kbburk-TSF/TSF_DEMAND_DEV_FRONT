@@ -138,6 +138,16 @@ function InlineLegend({ items }){
 // ==== Multi-series classical chart ====
 function MultiClassicalChart({ rows, yDomain }){
   if (!rows || !rows.length) return null;
+    // Prefer ci95 range to lock axis to green zone
+    {
+      const lows  = rows.map(r => r.ci95_low).filter(v => v!=null).map(Number);
+      const highs = rows.map(r => r.ci95_high).filter(v => v!=null).map(Number);
+      if (lows.length && highs.length){
+        const minv = Math.min(...lows), maxv = Math.max(...highs);
+        const pad = (maxv - minv) * 0.08 || 1;
+        return [minv - pad, maxv + pad];
+      }
+    }
   const { wrapRef, W, H, pad, xScale, innerW, innerH, startIdx, niceTicks } = useChartMath(rows);
 
   let Y0, Y1;
@@ -206,6 +216,16 @@ function MultiClassicalChart({ rows, yDomain }){
 // ==== GOLD ONLY: historical actuals + gold TSF line ====
 function GoldChart({ rows, yDomain }){
   if (!rows || !rows.length) return null;
+    // Prefer ci95 range to lock axis to green zone
+    {
+      const lows  = rows.map(r => r.ci95_low).filter(v => v!=null).map(Number);
+      const highs = rows.map(r => r.ci95_high).filter(v => v!=null).map(Number);
+      if (lows.length && highs.length){
+        const minv = Math.min(...lows), maxv = Math.max(...highs);
+        const pad = (maxv - minv) * 0.08 || 1;
+        return [minv - pad, maxv + pad];
+      }
+    }
   const { wrapRef, W, H, pad, xScale, innerW, innerH, startIdx, niceTicks } = useChartMath(rows);
 
   let Y0, Y1;
@@ -263,6 +283,16 @@ function GoldChart({ rows, yDomain }){
 // ==== GOLD + GREEN ZONE: historical actuals + gold TSF + low/high + polygon ====
 function GoldAndGreenZoneChart({ rows, yDomain }){
   if (!rows || !rows.length) return null;
+    // Prefer ci95 range to lock axis to green zone
+    {
+      const lows  = rows.map(r => r.ci95_low).filter(v => v!=null).map(Number);
+      const highs = rows.map(r => r.ci95_high).filter(v => v!=null).map(Number);
+      if (lows.length && highs.length){
+        const minv = Math.min(...lows), maxv = Math.max(...highs);
+        const pad = (maxv - minv) * 0.08 || 1;
+        return [minv - pad, maxv + pad];
+      }
+    }
   const { wrapRef, W, H, pad, xScale, innerW, innerH, startIdx, niceTicks } = useChartMath(rows);
 
   let Y0, Y1;
@@ -435,6 +465,16 @@ setStatus("");
 
   const sharedYDomain = useMemo(()=>{
     if (!rows || !rows.length) return null;
+    // Prefer ci95 range to lock axis to green zone
+    {
+      const lows  = rows.map(r => r.ci95_low).filter(v => v!=null).map(Number);
+      const highs = rows.map(r => r.ci95_high).filter(v => v!=null).map(Number);
+      if (lows.length && highs.length){
+        const minv = Math.min(...lows), maxv = Math.max(...highs);
+        const pad = (maxv - minv) * 0.08 || 1;
+        return [minv - pad, maxv + pad];
+      }
+    }
     const vals = rows.flatMap(r => [r.value, r.low, r.high, r.fv]).filter(v => v!=null).map(Number);
     if (!vals.length) return null;
     const minv = Math.min(...vals), maxv = Math.max(...vals);
