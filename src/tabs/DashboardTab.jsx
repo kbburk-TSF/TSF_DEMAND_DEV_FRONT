@@ -385,36 +385,28 @@ export default function DashboardTab(){
     } catch(e){ setStatus(String(e.message||e)); }
   }
 
-  const sharedYDomain = useMemo(() => {
+  sharedYDomain = useMemo(()=>{
     if (!rows || !rows.length) return null;
     const PREROLL = 7;
 
-    // Explicitly include first 7 historical actuals (pre-roll, solid line)
+    function isNum(v){ v = Number(v); return Number.isFinite(v); }
+
     const preRollActuals = rows.slice(0, PREROLL)
-      .map(r => r?.value)
-      .filter(v => v !== null && v !== undefined)
-      .map(Number)
-      .filter(Number.isFinite);
+      .map(r => r.value).filter(isNum).map(Number);
 
-    // Include all post-roll range + values (low/high/fv/actuals)
-    const postRoll = rows.slice(PREROLL);
-    const postVals = postRoll.flatMap(r => [r?.low, r?.high, r?.fv, r?.value])
-      .filter(v => v !== null && v !== undefined)
-      .map(Number)
-      .filter(Number.isFinite);
+    const postVals = rows.slice(PREROLL)
+      .flatMap(r => [r.low, r.high, r.fv, r.value])
+      .filter(isNum).map(Number);
 
-    // Fallback: include any values if data is sparse
-    const anyVals = rows.flatMap(r => [r?.value, r?.low, r?.high, r?.fv])
-      .filter(v => v !== null && v !== undefined)
-      .map(Number)
-      .filter(Number.isFinite);
+    let domainVals = preRollActuals.concat(postVals);
+    if (!domainVals.length){
+      domainVals = rows.flatMap(r => [r.value, r.low, r.high, r.fv])
+        .filter(isNum).map(Number);
+    }
+    if (!domainVals.length) return null;
 
-    const vals = [...preRollActuals, ...postVals];
-    const useVals = vals.length ? vals : anyVals;
-    if (!useVals.length) return null;
-
-    const minv = Math.min(...useVals);
-    const maxv = Math.max(...useVals);
+    const minv = Math.min(...domainVals);
+    const maxv = Math.max(...domainVals);
     const pad = (maxv - minv) * 0.08 || 1;
     return [minv - pad, maxv + pad];
   }, [rows]);
