@@ -307,7 +307,7 @@ const intervalFill90 = "rgba(46, 204, 113, 0.32)";
     { label: "Actuals (for comparison)", type: "line", stroke:"#000", dash:"4,6", width:2.4 },
     { label: "Targeted Seasonal Forecast", type: "line", stroke:fvColor, dash:null, width:2.4 },
     { label: "95% Confidence Interval", type: "box", fill:intervalFill, stroke:"#2ca02c" },
-{ label: "85% Confidence Interval", type: "box", fill:intervalFill90, stroke:"#2ca02c" },
+{ label: "85% Confidence Interval", type: "box", fill:"rgba(46, 204, 113, 0.60)", stroke:"#2ca02c" },
   ];
 
   return (
