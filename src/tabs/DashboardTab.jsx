@@ -8,7 +8,28 @@
 // - Shorter chart height for single-page fit.
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
-import { listForecastIds, queryView } from "../api.js";
+
+import { API_BASE } from "../env.js";
+const BACKEND = (
+  (typeof window !== "undefined" && window.__BACKEND_URL__) ||
+  (typeof API_BASE !== "undefined" && API_BASE) ||
+  "https://tsf-demand-back.onrender.com"
+).replace(/\/$/, "");
+
+async function httpGet(path){
+  const res = await fetch(`${BACKEND}${path}`);
+  if(!res.ok){ throw new Error(`HTTP ${res.status}`); }
+  return res.json();
+}
+async function httpPost(path, body){
+  const res = await fetch(`${BACKEND}${path}`, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(body||{})
+  });
+  if(!res.ok){ throw new Error(`HTTP ${res.status}`); }
+  return res.json();
+}
 
 // ==== helpers ====
 const MS_DAY = 86400000;
@@ -317,7 +338,7 @@ export default function DashboardTab(){
   useEffect(() => {
     (async () => {
       try {
-        const list = await listForecastIds({ scope:"global", model:"", series:"" });
+        const list = await httpGet("/views/forecasts");
         const norm = (Array.isArray(list) ? list : []).map(x => (
           typeof x === "string" ? { id:x, name:x }
           : { id:String(x.id ?? x.value ?? x), name:String(x.name ?? x.label ?? x.id ?? x) }
@@ -332,9 +353,14 @@ export default function DashboardTab(){
     if (!forecastId) return;
     (async () => {
       try {
-        setStatus("Scanning dates…");
-        const res = await queryView({ scope:"global", model:"", series:"", forecast_id: forecastId, date_from:null, date_to:null, page:1, page_size:20000 });
-        const dates = Array.from(new Set((res.rows||[]).map(r => r?.date).filter(Boolean))).sort();
+        setStatus("Loading months…");
+        const months = await httpGet(`/views/months?forecast_name=${encodeURIComponent(forecastId)}`);
+        setAllMonths(months);
+        if (months.length) setStartMonth(months[0] + "-01");
+        setStatus("");
+        return; // stop old scan logic
+        const data = await httpPost("/views/query", { forecast_name:String(forecastId), month:String(startMonth).slice(0,7), span:Number(monthsCount) });
+        const dates = Array.from(new Set((Array.isArray(data?.rows)?data.rows:(Array.isArray(data)?data:[])).map(r => r?.date).filter(Boolean))).sort();
         const months = Array.from(new Set(dates.map(s => s.slice(0,7)))).sort();
         setAllMonths(months);
         if (months.length) setStartMonth(months[0] + "-01");
@@ -353,16 +379,10 @@ export default function DashboardTab(){
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await queryView({
-        scope:"global", model:"", series:"",
-        forecast_id: String(forecastId),
-        date_from: ymd(preRollStart),
-        date_to: ymd(end),
-        page:1, page_size: 20000
-      });
+      const data = await httpPost("/views/query", { forecast_name:String(forecastId), month:String(startMonth).slice(0,7), span:Number(monthsCount) });
 
       const byDate = new Map();
-      for (const r of (res.rows||[])){
+      for (const r of (Array.isArray(data?.rows)?data.rows:(Array.isArray(data)?data:[]))){
         if (!r || !r.date) continue;
         byDate.set(r.date, r);
       }
