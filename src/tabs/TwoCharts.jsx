@@ -6,7 +6,7 @@
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
 
-// --- minimal backend helpers (no api.js) ---
+// --- local backend helpers (no api.js) ---
 import { API_BASE } from "../env.js"; // optional
 const BACKEND = (
   (typeof window !== "undefined" && window.__BACKEND_URL__) ||
@@ -21,26 +21,21 @@ async function __handle(res){
   }
   return res.json();
 }
-async function __get(path){ return __handle(await fetch(`${BACKEND}${path}`)); }
+async function __get(p){ return __handle(await fetch(`${BACKEND}${p}`)); }
 
-// list forecast names
-async function listForecastIds(){
+export async function listForecastIds(){
   const data = await __get("/views/forecasts");
   return Array.isArray(data) ? data.map(String) : [];
 }
-
-// months for a forecast
-async function listMonths(forecast_name){
+export async function listMonths(forecast_name){
   const q = encodeURIComponent(String(forecast_name||""));
   return await __get(`/views/months?forecast_name=${q}`);
 }
-
-// post query
-async function __postQuery(body){
+export async function __postQuery(body){
   const r = await fetch(`${BACKEND}/views/query`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body || {})
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(body||{})
   });
   return __handle(r);
 }
@@ -295,7 +290,7 @@ export default function TwoCharts(){
   useEffect(() => {
     (async () => {
       try {
-        const list = await listForecastIds({ scope:"global", model:"", series:"" });
+        const list = await listForecastIds();
         const norm = (Array.isArray(list) ? list : []).map(x => (
           typeof x === "string" ? { id:x, name:x }
           : { id:String(x.id ?? x.value ?? x), name:String(x.name ?? x.label ?? x.id ?? x) }
@@ -310,14 +305,16 @@ export default function TwoCharts(){
     if (!forecastId) return;
     (async () => {
       try {
-        setStatus("Scanning dates…");
-        const res = await __postQuery({ scope:"global", model:"", series:"", forecast_id: forecastId, date_from:null, date_to:null, page:1, page_size:20000 });
-        const dates = Array.from(new Set((res.rows||[]).map(r => r?.date).filter(Boolean))).sort();
-        const months = Array.from(new Set(dates.map(s => s.slice(0,7)))).sort();
-        setAllMonths(months);
-        if (months.length) setStartMonth(months[0] + "-01");
-        setStatus("");
-      } catch(e){ setStatus("Failed to scan dates: " + String(e.message||e)); }
+        setStatus("Loading months…");
+try {
+  const months = await listMonths(forecastId);
+  setAllMonths(months||[]);
+  if ((months||[]).length) setStartMonth(String(months[0]) + "-01");
+} catch (e) {
+  setError(e?.message||String(e));
+}
+setStatus("");
+} catch(e){ setStatus("Failed to scan dates: " + String(e.message||e)); }
     })();
   }, [forecastId]);
 
@@ -331,13 +328,7 @@ export default function TwoCharts(){
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await __postQuery({
-        scope:"global", model:"", series:"",
-        forecast_id: String(forecastId),
-        date_from: ymd(preRollStart),
-        date_to: ymd(end),
-        page:1, page_size: 20000
-      });
+      const res = await __postQuery({ forecast_name:String(forecastId), month:String(startMonth).slice(0,7), span:Number(monthsCount) });
 
       const byDate = new Map();
       for (const r of (res.rows||[])){
