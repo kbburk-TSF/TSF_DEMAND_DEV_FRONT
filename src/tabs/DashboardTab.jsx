@@ -8,7 +8,7 @@
 // - Shorter chart height for single-page fit.
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
-, body: JSON.stringify(b)}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
+
 import { listForecastIds, queryView } from "../api.js";
 
 // ==== helpers ====
@@ -354,7 +354,7 @@ export default function DashboardTab(){
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await queryView({ forecast_name: String(forecastId), month: startMonth.slice(0,7), span: Number(monthsCount) });
+      const res = await postJSON("/views/query", { forecast_name: String(forecastId), month: startMonth.slice(0,7), span: Number(monthsCount) });
       const byDate = new Map();
       for (const r of (res.rows||[])){
         if (!r || !r.date) continue;
