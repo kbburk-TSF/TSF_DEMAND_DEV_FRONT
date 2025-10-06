@@ -438,6 +438,18 @@ setStatus("");
 
   const sharedYDomain = useMemo(()=>{
     if (!rows || !rows.length) return null;
+
+    // Expand the clamped CI95 domain to also include ANY actuals (including the 7-day pre-roll).
+    const ciVals = rows.flatMap(r => [r.ci95_low, r.ci95_high]).filter(v => v!=null).map(Number);
+    const actualVals = rows.map(r => r.value).filter(v => v!=null).map(Number);
+    const vals = ciVals.concat(actualVals);
+
+    if (!vals.length) return null;
+    const minv = Math.min(...vals), maxv = Math.max(...vals);
+    const pad = (maxv - minv) * 0.08 || 1;
+    return [minv - pad, maxv + pad];
+  }, [rows]);=>{
+    if (!rows || !rows.length) return null;
     const PREROLL = 7;
     const ciVals = rows.flatMap(r => [r.ci95_low, r.ci95_high]).filter(v => v!=null).map(Number);
     const histVals = rows.slice(0, PREROLL).map(r => r.value).filter(v => v!=null).map(Number);
