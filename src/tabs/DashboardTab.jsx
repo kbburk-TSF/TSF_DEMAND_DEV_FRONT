@@ -420,15 +420,21 @@ setStatus("");
         const r = byDate.get(d) || {};
         return {
           date: d,
-          value: r.value ?? null,
+          // Prefer 'value', but accept common alternates if backend uses different naming
+          value: (r.value ?? r.actual ?? r.y ?? r.obs ?? null),
           fv: r.fv ?? null,
-          low: r.low ?? null,  ci95_low: r.ci95_low ?? null,
-          ci95_high: r.ci95_high ?? null,
-          ci90_low: r.ci85_low ?? null,
-          ci90_high: r.ci85_high ?? null,
-          ARIMA_M: r["ARIMA_M"] ?? null,
-          HWES_M:  r["HWES_M"]  ?? null,
-          SES_M:   r["SES_M"]   ?? null
+
+          // CI95 preferred; fall back to generic low/high if that’s what server returns
+          ci95_low:  (r.ci95_low  ?? r.low  ?? null),
+          ci95_high: (r.ci95_high ?? r.high ?? null),
+
+          // CI90 preferred; tolerate older 85% naming as a fallback
+          ci90_low:  (r.ci90_low  ?? r.ci85_low  ?? null),
+          ci90_high: (r.ci90_high ?? r.ci85_high ?? null),
+
+          ARIMA_M: r["ARIMA_M"] ?? r.ARIMA_M ?? null,
+          HWES_M:  r["HWES_M"]  ?? r.HWES_M  ?? null,
+          SES_M:   r["SES_M"]   ?? r.SES_M   ?? null
         };
       });
       setRows(strict);
@@ -438,14 +444,18 @@ setStatus("");
 
   const sharedYDomain = useMemo(()=>{
     if (!rows || !rows.length) return null;
-    const PREROLL = 7;
-
-    // Explicitly include the first 7 actuals (pre-roll)
-    const preRollActuals = rows
-      .slice(0, PREROLL)
-      .map(r => r?.value)
-      .filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)))
-      .map(Number);
+    // Build a comprehensive set of y-values so pre-roll actuals NEVER get clipped
+    const vals = rows.flatMap(r => [
+      r?.value, r?.fv,
+      r?.low, r?.high,
+      r?.ci95_low, r?.ci95_high,
+      r?.ci90_low, r?.ci90_high
+    ]).filter(v => v!=null && Number.isFinite(Number(v))).map(Number);
+    if (!vals.length) return null;
+    const minv = Math.min(...vals), maxv = Math.max(...vals);
+    const pad = (maxv - minv) * 0.08 || 1;
+    return [minv - pad, maxv + pad];
+  }, [rows]);
 
     // Include ALL actuals too (safety net if pre-roll has gaps)
     const allActuals = rows
