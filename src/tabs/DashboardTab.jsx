@@ -81,7 +81,7 @@ function useChartMath(rows){
   const H = Math.max(220, Math.min(340, Math.round(W * 0.22))); // shorter responsive height
   const pad = { top: 28, right: 24, bottom: 72, left: 70 };
   const N = (rows||[]).length;
-  const startIdx = 7; // preroll days
+  const startIdx = Math.min(7, rows.length); // preroll days
 
   const innerW = Math.max(1, W - pad.left - pad.right);
   const innerH = Math.max(1, H - pad.top - pad.bottom);
@@ -153,7 +153,10 @@ function MultiClassicalChart({ rows, yDomain }){
   const yScale = v => pad.top + innerH * (1 - ((v - Y0) / Math.max(1e-9, (Y1 - Y0))));
   const path = pts => pts.length ? pts.map((p,i)=>(i?"L":"M")+xScale(p.i)+" "+yScale(p.y)).join(" ") : "";
 
-  const histActualPts = rows.map((r,i) => (r.value!=null && i < startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
+  const histActualPts = rows.map((r,i) => {
+  const v = (r?.value ?? r?.actual ?? r?.actual_value ?? r?.obs ?? r?.observed ?? r?.y ?? null);
+  return (v!=null && i < startIdx) ? { i, y:Number(v) } : null;
+}).filter(Boolean);
   const futActualPts  = rows.map((r,i) => (r.value!=null && i >= startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
   const makePts = (field) => rows.map((r,i) => (r[field]!=null && i >= startIdx) ? { i, y:Number(r[field]) } : null).filter(Boolean);
   const arimaPts = makePts("ARIMA_M");
@@ -221,7 +224,10 @@ function GoldChart({ rows, yDomain }){
   const yScale = v => pad.top + innerH * (1 - ((v - Y0) / Math.max(1e-9, (Y1 - Y0))));
   const path = pts => pts.length ? pts.map((p,i)=>(i?"L":"M")+xScale(p.i)+" "+yScale(p.y)).join(" ") : "";
 
-  const histActualPts = rows.map((r,i) => (r.value!=null && i < startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
+  const histActualPts = rows.map((r,i) => {
+  const v = (r?.value ?? r?.actual ?? r?.actual_value ?? r?.obs ?? r?.observed ?? r?.y ?? null);
+  return (v!=null && i < startIdx) ? { i, y:Number(v) } : null;
+}).filter(Boolean);
   const futActualPts  = rows.map((r,i) => (r.value!=null && i >= startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
   const fvPts         = rows.map((r,i) => (r.fv!=null    && i >= startIdx) ? { i, y:Number(r.fv) }    : null).filter(Boolean);
   const yTicks = niceTicks(Y0, Y1, 6);
@@ -278,7 +284,10 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
   const yScale = v => pad.top + innerH * (1 - ((v - Y0) / Math.max(1e-9, (Y1 - Y0))));
   const path = pts => pts.length ? pts.map((p,i)=>(i?"L":"M")+xScale(p.i)+" "+yScale(p.y)).join(" ") : "";
 
-  const histActualPts = rows.map((r,i) => (r.value!=null && i < startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
+  const histActualPts = rows.map((r,i) => {
+  const v = (r?.value ?? r?.actual ?? r?.actual_value ?? r?.obs ?? r?.observed ?? r?.y ?? null);
+  return (v!=null && i < startIdx) ? { i, y:Number(v) } : null;
+}).filter(Boolean);
   const futActualPts  = rows.map((r,i) => (r.value!=null && i >= startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
   const fvPts         = rows.map((r,i) => (r.fv!=null    && i >= startIdx) ? { i, y:Number(r.fv) }    : null).filter(Boolean);
   const lowPts        = rows.map((r,i) => (r.low!=null   && i >= startIdx) ? { i, y:Number(r.low) }   : null).filter(Boolean);
@@ -408,7 +417,7 @@ setStatus("");
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await __postQuery({ forecast_name:String(forecastId), month:String(startMonth).slice(0,7), span:Number(monthsCount) });
+      const res = await __postQuery({ forecast_name:String(forecastId), month:String(startMonth).slice(0,7), span:Number(monthsCount) , date_from: ymd(preRollStart), date_to: ymd(end)});
 
       const byDate = new Map();
       for (const r of (res.rows||[])){
@@ -420,52 +429,62 @@ setStatus("");
         const r = byDate.get(d) || {};
         return {
           date: d,
-          value: r.value ?? null,
+          // Prefer 'value', but accept common alternates if backend uses different naming
+          value: (r.value ?? r.actual ?? r.actual_value ?? r.obs ?? r.observed ?? r.y ?? null),
           fv: r.fv ?? null,
-          low: r.low ?? null,  ci95_low: r.ci95_low ?? null,
-          ci95_high: r.ci95_high ?? null,
-          ci90_low: r.ci85_low ?? null,
-          ci90_high: r.ci85_high ?? null,
-          ARIMA_M: r["ARIMA_M"] ?? null,
-          HWES_M:  r["HWES_M"]  ?? null,
-          SES_M:   r["SES_M"]   ?? null
+
+          // CI95 preferred; fall back to generic low/high if that’s what server returns
+          ci95_low: (r.ci95_low ?? r.low ?? null),
+          ci95_high: (r.ci95_high ?? r.high ?? null),
+
+          // CI90 preferred; tolerate older 85% naming as a fallback
+          ci90_low: (r.ci90_low ?? r.ci85_low ?? r.low ?? null),
+          ci90_high: (r.ci90_high ?? r.ci85_high ?? r.high ?? null),
+
+          ARIMA_M: r["ARIMA_M"] ?? r.ARIMA_M ?? null,
+          HWES_M:  r["HWES_M"]  ?? r.HWES_M  ?? null,
+          SES_M:   r["SES_M"]   ?? r.SES_M   ?? null
         };
       });
-      setRows(strict);
+      
+      // Normalize first 7 days (pre-roll): fill value from common alternates if missing
+      for (let i = 0; i < Math.min(7, strict.length); i++){
+        if (strict[i].value == null){
+          const org = byDate.get(strict[i].date) || {};
+          strict[i].value = (org.value ?? org.actual ?? org.actual_value ?? org.obs ?? org.observed ?? org.y ?? null);
+        }
+      }
+setRows(strict);
       setStatus("");
     } catch(e){ setStatus(String(e.message||e)); }
   }
 
-  const sharedYDomain = useMemo(()=>{
+  const sharedYDomain = useMemo(() => {
     if (!rows || !rows.length) return null;
-    const PREROLL = 7;
-
-    // Explicitly include the first 7 actuals (pre-roll)
-    const preRollActuals = rows
-      .slice(0, PREROLL)
-      .map(r => r?.value)
-      .filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)))
-      .map(Number);
-
-    // Include ALL actuals too (safety net if pre-roll has gaps)
-    const allActuals = rows
-      .map(r => r?.value)
-      .filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)))
-      .map(Number);
-
-    // Include CI95 bounds anywhere they exist
-    const ciBounds = rows.flatMap(r => [r?.ci95_low, r?.ci95_high])
-      .filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)))
-      .map(Number);
-
-    const domainVals = [...ciBounds, ...allActuals, ...preRollActuals];
+    // Include historical pre-roll actuals and all series/CI values so the y-domain never clips.
+    const PREROLL = Math.min(7, rows.length);
+    const preActuals = rows.slice(0, PREROLL).map(r => r?.value).filter(v => v!=null).map(Number);
+    const vals = rows.flatMap(r => [
+      r?.value, r?.fv,
+      r?.ARIMA_M, r?.SES_M, r?.HWES_M,
+      r?.low, r?.high,
+      r?.ci95_low, r?.ci95_high,
+      r?.ci90_low, r?.ci90_high
+    ]).filter(v => v!=null && Number.isFinite(Number(v))).map(Number);
+    const domainVals = vals.concat(preActuals);
     if (!domainVals.length) return null;
-
     const minv = Math.min(...domainVals);
     const maxv = Math.max(...domainVals);
-    const pad = (maxv - minv) * 0.08 || 1; // keep 8% padding; at least 1
+    const pad = (maxv - minv) * 0.08 || 1;
     return [minv - pad, maxv + pad];
   }, [rows]);
+    if (!vals.length) return null;
+    const minv = Math.min(...vals);
+    const maxv = Math.max(...vals);
+    const pad = (maxv - minv) * 0.08 || 1;
+    return [minv - pad, maxv + pad];
+  }, [rows]);
+
 
   return (
     <div style={{width:"100%"}}>
