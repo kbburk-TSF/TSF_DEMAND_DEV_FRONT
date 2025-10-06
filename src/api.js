@@ -1,32 +1,45 @@
-// src/api.js - clean, ASCII-only
-// Provides: BACKEND, getJSON, postJSON, listForecastIds, listMonths, queryView
-const DEFAULT_BACKEND = "https://tsf-demand-back.onrender.com";
-export const BACKEND = (
-  (typeof window !== "undefined" && window.__BACKEND_URL__) ||
-  (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_BACKEND_URL) ||
-  DEFAULT_BACKEND
-).replace(/\/$/, "");
+import { API_BASE } from "./env.js";
 
-async function _handle(res) { if (!res.ok) { throw new Error(`HTTP ${res.status}`); } return res.json(); }
-export async function getJSON(url) { return _handle(await fetch(url)); }
-export async function postJSON(url, body) {
-  return _handle(await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }));
+export async function health(){
+  const r = await fetch((API_BASE || "") + "/health");
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
 }
 
-export async function listForecastIds() {
-  const data = await getJSON(`${BACKEND}/views/forecasts`);
-  return Array.isArray(data) ? data.map(x => String(x)) : [];
+export async function loadClassicalOptions(){
+  const r = await fetch((API_BASE || "") + "/forms/classical", { headers: { "Accept": "text/html" } });
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  const html = await r.text();
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  const paramSel = doc.querySelector('select[name="parameter"], select#parameter, select#param');
+  const stateSel = doc.querySelector('select[name="state"], select#state');
+  const params = paramSel ? Array.from(paramSel.options).map(o => o.value).filter(Boolean) : [];
+  const states = stateSel ? Array.from(stateSel.options).map(o => o.value).filter(Boolean) : [];
+  return { params, states };
 }
 
-export async function listMonths(forecast_name) {
-  const q = encodeURIComponent(String(forecast_name || ""));
-  return await getJSON(`${BACKEND}/views/months?forecast_name=${q}`);
+/* ---------- Views API ---------- */
+
+export async function fetchViewsMeta(){
+  const r = await fetch((API_BASE || "") + "/views/meta");
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  return r.json(); // { scopes, models, series, most_recent? }
 }
 
-export async function queryView({ forecast_name, month, span }) {
-  return await postJSON(`${BACKEND}/views/query`, {
-    forecast_name: String(forecast_name || ""),
-    month: String(month || "").slice(0, 7),
-    span: Number(span || 1)
+export async function listForecastIds({ scope, model, series }){
+  const q = new URLSearchParams({ scope, model: model || "", series: series || "" });
+  const r = await fetch((API_BASE || "") + "/views/ids?" + q.toString());
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  return r.json(); // ["uuid", ...] newest-first
+}
+
+export async function queryView({ scope, model, series, forecast_id, date_from, date_to, page = 1, page_size = 2000 }){
+  const r = await fetch((API_BASE || "") + "/views/query", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scope, model, series, forecast_id, date_from, date_to, page, page_size })
   });
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  return r.json(); // { rows, total }
 }
