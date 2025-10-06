@@ -98,7 +98,7 @@ function useChartMath(rows){
   return { wrapRef, W, H, pad, xScale, innerW, innerH, startIdx, niceTicks };
 }
 
-// Legend component â€” boxed, centered, horizontal
+// Legend component — boxed, centered, horizontal
 function InlineLegend({ items }){
   if (!items || !items.length) return null;
   return (
@@ -382,7 +382,7 @@ export default function DashboardTab(){
     if (!forecastId) return;
     (async () => {
       try {
-        setStatus("Loading monthsâ€¦");
+        setStatus("Loading months…");
 try {
   const months = await listMonths(forecastId);
   const __parseMonth = (m) => { const [y, mo] = String(m).split("-"); return Date.UTC(Number(y), Number(mo)-1, 1); };
@@ -403,7 +403,7 @@ setStatus("");
   async function run(){
     if (!forecastId || !startMonth) return;
     try{
-      setStatus("Loadingâ€¦");
+      setStatus("Loading…");
       const start = firstOfMonthUTC(parseYMD(startMonth));
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
@@ -438,32 +438,38 @@ setStatus("");
 
   const sharedYDomain = useMemo(()=>{
     if (!rows || !rows.length) return null;
-
-    // Expand the clamped CI95 domain to also include ANY actuals (including the 7-day pre-roll).
-    const ciVals = rows.flatMap(r => [r.ci95_low, r.ci95_high]).filter(v => v!=null).map(Number);
-    const actualVals = rows.map(r => r.value).filter(v => v!=null).map(Number);
-    const vals = ciVals.concat(actualVals);
-
-    if (!vals.length) return null;
-    const minv = Math.min(...vals), maxv = Math.max(...vals);
-    const pad = (maxv - minv) * 0.08 || 1;
-    return [minv - pad, maxv + pad];
-  }, [rows]);=>{
-    if (!rows || !rows.length) return null;
     const PREROLL = 7;
-    const ciVals = rows.flatMap(r => [r.ci95_low, r.ci95_high]).filter(v => v!=null).map(Number);
-    const histVals = rows.slice(0, PREROLL).map(r => r.value).filter(v => v!=null).map(Number);
-    const vals = ciVals.concat(histVals);
 
-    if (!vals.length) return null;
-    const minv = Math.min(...vals), maxv = Math.max(...vals);
-    const pad = (maxv - minv) * 0.08 || 1;
+    // Explicitly include the first 7 actuals (pre-roll)
+    const preRollActuals = rows
+      .slice(0, PREROLL)
+      .map(r => r?.value)
+      .filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)))
+      .map(Number);
+
+    // Include ALL actuals too (safety net if pre-roll has gaps)
+    const allActuals = rows
+      .map(r => r?.value)
+      .filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)))
+      .map(Number);
+
+    // Include CI95 bounds anywhere they exist
+    const ciBounds = rows.flatMap(r => [r?.ci95_low, r?.ci95_high])
+      .filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)))
+      .map(Number);
+
+    const domainVals = [...ciBounds, ...allActuals, ...preRollActuals];
+    if (!domainVals.length) return null;
+
+    const minv = Math.min(...domainVals);
+    const maxv = Math.max(...domainVals);
+    const pad = (maxv - minv) * 0.08 || 1; // keep 8% padding; at least 1
     return [minv - pad, maxv + pad];
   }, [rows]);
 
   return (
     <div style={{width:"100%"}}>
-      <h2 style={{marginTop:0}}>Dashboard â€” Classical + Targeted Seasonal</h2>
+      <h2 style={{marginTop:0}}>Dashboard — Classical + Targeted Seasonal</h2>
 
       <div className="row" style={{alignItems:"end", flexWrap:"wrap"}}>
         <div>
