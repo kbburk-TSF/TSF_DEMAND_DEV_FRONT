@@ -7,7 +7,7 @@
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
 
 // minimal helper for /views/query (env not touched)
-async function postJSON(u,b){ const r = await fetch(u,{method:"POST",headers:{ "Content-Type":"application/json"}, body: JSON.stringify(b)}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
+, body: JSON.stringify(b)}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
 import { listForecastIds, queryView, postJSON } from "../api.js";
 
 // ==== helpers ====
