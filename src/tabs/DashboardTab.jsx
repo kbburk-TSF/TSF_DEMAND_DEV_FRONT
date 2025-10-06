@@ -385,8 +385,11 @@ export default function DashboardTab(){
         setStatus("Loading months…");
 try {
   const months = await listMonths(forecastId);
-  setAllMonths(months||[]);
-  if ((months||[]).length) setStartMonth(String(months[0]) + "-01");
+  const __parseMonth = (m) => { const [y, mo] = String(m).split("-"); return Date.UTC(Number(y), Number(mo)-1, 1); };
+  const __sorted = (months||[]).slice().sort((a,b)=> __parseMonth(a) - __parseMonth(b));
+  const __last24 = __sorted.slice(-24);
+  setAllMonths(__last24);
+  if (__last24.length) setStartMonth(String(__last24[0]) + "-01");
 } catch (e) {
   setError(e?.message||String(e));
 }
