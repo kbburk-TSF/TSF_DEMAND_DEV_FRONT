@@ -153,7 +153,10 @@ function MultiClassicalChart({ rows, yDomain }){
   const yScale = v => pad.top + innerH * (1 - ((v - Y0) / Math.max(1e-9, (Y1 - Y0))));
   const path = pts => pts.length ? pts.map((p,i)=>(i?"L":"M")+xScale(p.i)+" "+yScale(p.y)).join(" ") : "";
 
-  const histActualPts = rows.map((r,i) => (r.value!=null && i < startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
+  const histActualPts = rows.map((r,i) => {
+  const v = (r?.value ?? r?.actual ?? r?.actual_value ?? r?.obs ?? r?.observed ?? r?.y ?? null);
+  return (v!=null && i < startIdx) ? { i, y:Number(v) } : null;
+}).filter(Boolean);
   const futActualPts  = rows.map((r,i) => (r.value!=null && i >= startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
   const makePts = (field) => rows.map((r,i) => (r[field]!=null && i >= startIdx) ? { i, y:Number(r[field]) } : null).filter(Boolean);
   const arimaPts = makePts("ARIMA_M");
@@ -221,7 +224,10 @@ function GoldChart({ rows, yDomain }){
   const yScale = v => pad.top + innerH * (1 - ((v - Y0) / Math.max(1e-9, (Y1 - Y0))));
   const path = pts => pts.length ? pts.map((p,i)=>(i?"L":"M")+xScale(p.i)+" "+yScale(p.y)).join(" ") : "";
 
-  const histActualPts = rows.map((r,i) => (r.value!=null && i < startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
+  const histActualPts = rows.map((r,i) => {
+  const v = (r?.value ?? r?.actual ?? r?.actual_value ?? r?.obs ?? r?.observed ?? r?.y ?? null);
+  return (v!=null && i < startIdx) ? { i, y:Number(v) } : null;
+}).filter(Boolean);
   const futActualPts  = rows.map((r,i) => (r.value!=null && i >= startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
   const fvPts         = rows.map((r,i) => (r.fv!=null    && i >= startIdx) ? { i, y:Number(r.fv) }    : null).filter(Boolean);
   const yTicks = niceTicks(Y0, Y1, 6);
@@ -278,7 +284,10 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
   const yScale = v => pad.top + innerH * (1 - ((v - Y0) / Math.max(1e-9, (Y1 - Y0))));
   const path = pts => pts.length ? pts.map((p,i)=>(i?"L":"M")+xScale(p.i)+" "+yScale(p.y)).join(" ") : "";
 
-  const histActualPts = rows.map((r,i) => (r.value!=null && i < startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
+  const histActualPts = rows.map((r,i) => {
+  const v = (r?.value ?? r?.actual ?? r?.actual_value ?? r?.obs ?? r?.observed ?? r?.y ?? null);
+  return (v!=null && i < startIdx) ? { i, y:Number(v) } : null;
+}).filter(Boolean);
   const futActualPts  = rows.map((r,i) => (r.value!=null && i >= startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
   const fvPts         = rows.map((r,i) => (r.fv!=null    && i >= startIdx) ? { i, y:Number(r.fv) }    : null).filter(Boolean);
   const lowPts        = rows.map((r,i) => (r.low!=null   && i >= startIdx) ? { i, y:Number(r.low) }   : null).filter(Boolean);
@@ -421,16 +430,16 @@ setStatus("");
         return {
           date: d,
           // Prefer 'value', but accept common alternates if backend uses different naming
-          value: (r.value ?? r.actual ?? r.y ?? r.obs ?? null),
+          value: (r.value ?? r.actual ?? r.actual_value ?? r.obs ?? r.observed ?? r.y ?? null),
           fv: r.fv ?? null,
 
           // CI95 preferred; fall back to generic low/high if that’s what server returns
-          ci95_low:  (r.ci95_low  ?? r.low  ?? null),
+          ci95_low: (r.ci95_low ?? r.low ?? null),
           ci95_high: (r.ci95_high ?? r.high ?? null),
 
           // CI90 preferred; tolerate older 85% naming as a fallback
-          ci90_low:  (r.ci90_low  ?? r.ci85_low  ?? null),
-          ci90_high: (r.ci90_high ?? r.ci85_high ?? null),
+          ci90_low: (r.ci90_low ?? r.ci85_low ?? r.low ?? null),
+          ci90_high: (r.ci90_high ?? r.ci85_high ?? r.high ?? null),
 
           ARIMA_M: r["ARIMA_M"] ?? r.ARIMA_M ?? null,
           HWES_M:  r["HWES_M"]  ?? r.HWES_M  ?? null,
@@ -446,10 +455,17 @@ setStatus("");
     if (!rows || !rows.length) return null;
     const vals = rows.flatMap(r => [
       r?.value, r?.fv,
+      r?.ARIMA_M, r?.SES_M, r?.HWES_M,
       r?.low, r?.high,
       r?.ci95_low, r?.ci95_high,
       r?.ci90_low, r?.ci90_high
     ]).filter(v => v!=null && Number.isFinite(Number(v))).map(Number);
+    if (!vals.length) return null;
+    const minv = Math.min(...vals);
+    const maxv = Math.max(...vals);
+    const pad = (maxv - minv) * 0.08 || 1;
+    return [minv - pad, maxv + pad];
+  }, [rows]);
     if (!vals.length) return null;
     const minv = Math.min(...vals);
     const maxv = Math.max(...vals);
