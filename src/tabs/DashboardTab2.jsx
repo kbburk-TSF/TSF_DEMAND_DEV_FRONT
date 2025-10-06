@@ -6,7 +6,7 @@
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
 
-import { listForecastIds, queryView, postJSON } from "../api.js";
+import { listForecastIds, queryView } from "../api.js";
 
 // ==== helpers ====
 const MS_DAY = 86400000;
@@ -294,7 +294,7 @@ export default function DashboardTab2(){
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await postJSON("/views/query", { forecast_name: String(forecastId), month: startMonth.slice(0,7), span: Number(monthsCount) });
+      const res = await queryView({ forecast_name: String(forecastId), month: startMonth.slice(0,7), span: Number(monthsCount) });
       const byDate = new Map();
       for (const r of (res.rows||[])){
         if (!r || !r.date) continue;
