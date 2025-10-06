@@ -81,7 +81,7 @@ function useChartMath(rows){
   const H = Math.max(220, Math.min(340, Math.round(W * 0.22))); // shorter responsive height
   const pad = { top: 28, right: 24, bottom: 72, left: 70 };
   const N = (rows||[]).length;
-  const startIdx = 7; // preroll days
+  const startIdx = Math.min(7, (rows?.length||0)); // preroll days
 
   const innerW = Math.max(1, W - pad.left - pad.right);
   const innerH = Math.max(1, H - pad.top - pad.bottom);
@@ -408,7 +408,7 @@ setStatus("");
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await __postQuery({ forecast_name:String(forecastId), month:String(startMonth).slice(0,7), span:Number(monthsCount) });
+      const res = await __postQuery({ forecast_name:String(forecastId), month:String(startMonth).slice(0,7), span:Number(monthsCount), from: ymd(preRollStart), to: ymd(end), start_date: ymd(preRollStart), end_date: ymd(end) });
 
       const byDate = new Map();
       for (const r of (res.rows||[])){
@@ -436,16 +436,20 @@ setStatus("");
     } catch(e){ setStatus(String(e.message||e)); }
   }
 
-  const sharedYDomain = useMemo(()=>{
-    if (!rows || !rows.length) return null;
-    const vals = rows.flatMap(r => [r.ci95_low, r.ci95_high]).filter(v => v!=null).map(Number);
-    if (!vals.length) return null;
-    const minv = Math.min(...vals), maxv = Math.max(...vals);
-    const pad = (maxv - minv) * 0.08 || 1;
-    return [minv - pad, maxv + pad];
-  }, [rows]);
-
-  return (
+  const sharedYDomain = useMemo(() => {
+  if (!rows || !rows.length) return null;
+  const vals = rows.flatMap(r => [
+    r.value, r.fv, r.low, r.high,
+    r.ci95_low, r.ci95_high,
+    r.ci90_low, r.ci90_high,
+    r["ARIMA_M"], r["SES_M"], r["HWES_M"]
+  ]).filter(v => v != null).map(Number);
+  if (!vals.length) return null;
+  const minv = Math.min(...vals), maxv = Math.max(...vals);
+  const pad = (maxv - minv) * 0.08 || 1;
+  return [minv - pad, maxv + pad];
+}, [rows]);
+return (
     <div style={{width:"100%"}}>
       <h2 style={{marginTop:0}}>Dashboard — Classical + Targeted Seasonal</h2>
 
