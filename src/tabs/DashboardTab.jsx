@@ -306,8 +306,8 @@ const intervalFill90 = "rgba(46, 204, 113, 0.32)";
     { label: "Historical Values", type: "line", stroke:"#000", dash:null, width:1.8 },
     { label: "Actuals (for comparison)", type: "line", stroke:"#000", dash:"4,6", width:2.4 },
     { label: "Targeted Seasonal Forecast", type: "line", stroke:fvColor, dash:null, width:2.4 },
-    { label: "95% Confidence Forecast Interval", type: "box", fill:intervalFill, stroke:"#2ca02c" },
-{ label: "90% Confidence Forecast Interval", type: "box", fill:intervalFill90, stroke:"#2ca02c" },
+    { label: "95% Confidence Interval", type: "box", fill:intervalFill, stroke:"#2ca02c" },
+{ label: "85% Confidence Interval", type: "box", fill:intervalFill90, stroke:"#2ca02c" },
   ];
 
   return (
@@ -421,8 +421,8 @@ setStatus("");
           fv: r.fv ?? null,
           low: r.low ?? null,  ci95_low: r.ci95_low ?? null,
           ci95_high: r.ci95_high ?? null,
-          ci90_low: r.ci90_low ?? null,
-          ci90_high: r.ci90_high ?? null,
+          ci90_low: r.ci85_low ?? null,
+          ci90_high: r.ci85_high ?? null,
           ARIMA_M: r["ARIMA_M"] ?? null,
           HWES_M:  r["HWES_M"]  ?? null,
           SES_M:   r["SES_M"]   ?? null
