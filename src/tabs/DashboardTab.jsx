@@ -435,7 +435,7 @@ setStatus("");
 
   const sharedYDomain = useMemo(()=>{
     if (!rows || !rows.length) return null;
-    const vals = rows.flatMap(r => [r.value, r.low, r.high, r.fv]).filter(v => v!=null).map(Number);
+    const vals = rows.flatMap(r => [r.ci95_low, r.ci95_high]).filter(v => v!=null).map(Number);
     if (!vals.length) return null;
     const minv = Math.min(...vals), maxv = Math.max(...vals);
     const pad = (maxv - minv) * 0.08 || 1;
