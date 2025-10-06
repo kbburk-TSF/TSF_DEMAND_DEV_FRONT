@@ -160,7 +160,13 @@ function MultiClassicalChart({ rows, yDomain }){
   const sesPts   = makePts("SES_M");
   const hwesPts  = makePts("HWES_M");
 
-  const yTicks = niceTicks(Y0, Y1, 6);
+    // Fallbacks if CI bands are missing: use legacy low/high as a stand-in for 90% band
+  /*fallback-inserted*/
+  const hasCI = (ci95Top.length + ci90Top.length + ci85Top.length) > 0;
+  let lowTop = rows.map((r,i)=>(r.low!=null && r.high!=null && i>=startIdx)?[xScale(i), yScale(Number(r.high))]:null).filter(Boolean);
+  let lowBot = rows.map((r,i)=>(r.low!=null && r.high!=null && i>=startIdx)?[xScale(i), yScale(Number(r.low))]:null).filter(Boolean).reverse();
+  const lowPoly = [...lowTop, ...lowBot].map(([x,y])=>`${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
+const yTicks = niceTicks(Y0, Y1, 6);
 
   const C_ARIMA = "#d62728";
   const C_SES   = "#1f77b4";
@@ -185,7 +191,7 @@ function MultiClassicalChart({ rows, yDomain }){
             <text x={pad.left-10} y={yScale(v)+4} fontSize="11" fill="#666" textAnchor="end">{v}</text>
           </g>
         ))}
-        <rect x={xScale(0)} y={pad.top} width={Math.max(0, xScale(7)-xScale(0))} height={H-pad.top-pad.bottom} fill="rgba(0,0,0,0.08)"/>
+        <rect x={xScale(0)} y={pad.top} width={Math.max(0, xScale(startIdx) - xScale(0))} height={H-pad.top-pad.bottom} fill="rgba(0,0,0,0.08)"/>
         <path d={path(histActualPts)} fill="none" stroke="#000" strokeWidth={1.8}/>
         <path d={path(futActualPts)}  fill="none" stroke="#000" strokeWidth={2.4} strokeDasharray="4,6"/>
         <path d={path(arimaPts)}      fill="none" stroke={C_ARIMA} strokeWidth={2.4}/>
@@ -244,7 +250,7 @@ function GoldChart({ rows, yDomain }){
             <text x={pad.left-10} y={yScale(v)+4} fontSize="11" fill="#666" textAnchor="end">{v}</text>
           </g>
         ))}
-        <rect x={xScale(0)} y={pad.top} width={Math.max(0, xScale(7)-xScale(0))} height={H-pad.top-pad.bottom} fill="rgba(0,0,0,0.08)"/>
+        <rect x={xScale(0)} y={pad.top} width={Math.max(0, xScale(startIdx) - xScale(0))} height={H-pad.top-pad.bottom} fill="rgba(0,0,0,0.08)"/>
         <path d={path(histActualPts)} fill="none" stroke="#000" strokeWidth={1.8}/>
         <path d={path(futActualPts)}  fill="none" stroke="#000" strokeWidth={2.4} strokeDasharray="4,6"/>
         <path d={path(fvPts)}         fill="none" stroke={fvColor} strokeWidth={2.4}/>
@@ -295,6 +301,14 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
   const ci85Top = rows.map((r,i)=>(r.ci85_low!=null && r.ci85_high!=null && i>=startIdx)?[xScale(i), yScale(Number(r.ci85_high))]:null).filter(Boolean);
   const ci85Bot = rows.map((r,i)=>(r.ci85_low!=null && r.ci85_high!=null && i>=startIdx)?[xScale(i), yScale(Number(r.ci85_low))]:null).filter(Boolean).reverse();
   const ci85Poly = [...ci85Top, ...ci85Bot].map(([x,y])=>`${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
+
+  // Stroke boundary point arrays for CI bands
+  const ci95HighPts = rows.map((r,i)=>(r.ci95_high!=null && i>=startIdx)?{ i, y:Number(r.ci95_high) }:null).filter(Boolean);
+  const ci95LowPts  = rows.map((r,i)=>(r.ci95_low !=null && i>=startIdx)?{ i, y:Number(r.ci95_low)  }:null).filter(Boolean);
+  const ci90HighPts = rows.map((r,i)=>(r.ci90_high!=null && i>=startIdx)?{ i, y:Number(r.ci90_high) }:null).filter(Boolean);
+  const ci90LowPts  = rows.map((r,i)=>(r.ci90_low !=null && i>=startIdx)?{ i, y:Number(r.ci90_low)  }:null).filter(Boolean);
+  const ci85HighPts = rows.map((r,i)=>(r.ci85_high!=null && i>=startIdx)?{ i, y:Number(r.ci85_high) }:null).filter(Boolean);
+  const ci85LowPts  = rows.map((r,i)=>(r.ci85_low !=null && i>=startIdx)?{ i, y:Number(r.ci85_low)  }:null).filter(Boolean);
   const yTicks = niceTicks(Y0, Y1, 6);
 
   const fill95 = "rgba(46, 204, 113, 0.22)";  // light green
@@ -323,8 +337,16 @@ const strokeGreen = "#0f5c1a";
             <text x={pad.left-10} y={yScale(v)+4} fontSize="11" fill="#666" textAnchor="end">{v}</text>
           </g>
         ))}
-        <rect x={xScale(0)} y={pad.top} width={Math.max(0, xScale(7)-xScale(0))} height={H-pad.top-pad.bottom} fill="rgba(0,0,0,0.08)"/>
-        {polyStr && <polygon points={polyStr} fill={intervalFill} stroke="none" />}
+        <rect x={xScale(0)} y={pad.top} width={Math.max(0, xScale(startIdx) - xScale(0))} height={H-pad.top-pad.bottom} fill="rgba(0,0,0,0.08)"/>
+        {ci95Poly && <polygon points={ci95Poly} fill={fill95} stroke="none" />}
+{ci90Poly && <polygon points={ci90Poly} fill={fill90} stroke="none" />}
+{ci85Poly && <polygon points={ci85Poly} fill={fill85} stroke="none" />}
+<path d={path(ci95HighPts)} fill="none" stroke={strokeGreen} strokeWidth={1.6}/>
+<path d={path(ci95LowPts)}  fill="none" stroke={strokeGreen} strokeWidth={1.6}/>
+<path d={path(ci90HighPts)} fill="none" stroke={strokeGreen} strokeWidth={1.6}/>
+<path d={path(ci90LowPts)}  fill="none" stroke={strokeGreen} strokeWidth={1.6}/>
+<path d={path(ci85HighPts)} fill="none" stroke={strokeGreen} strokeWidth={1.6}/>
+<path d={path(ci85LowPts)}  fill="none" stroke={strokeGreen} strokeWidth={1.6}/>
         <path d={path(histActualPts)} fill="none" stroke="#000" strokeWidth={1.8}/>
         <path d={path(futActualPts)}  fill="none" stroke="#000" strokeWidth={2.4} strokeDasharray="4,6"/>
         <path d={path(fvPts)}         fill="none" stroke={fvColor} strokeWidth={2.4}/>
