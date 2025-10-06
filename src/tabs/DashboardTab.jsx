@@ -81,7 +81,7 @@ function useChartMath(rows){
   const H = Math.max(220, Math.min(340, Math.round(W * 0.22))); // shorter responsive height
   const pad = { top: 28, right: 24, bottom: 72, left: 70 };
   const N = (rows||[]).length;
-  const startIdx = 7; // preroll days
+  const startIdx = Math.min(7, rows.length); // preroll days
 
   const innerW = Math.max(1, W - pad.left - pad.right);
   const innerH = Math.max(1, H - pad.top - pad.bottom);
@@ -446,13 +446,23 @@ setStatus("");
           SES_M:   r["SES_M"]   ?? r.SES_M   ?? null
         };
       });
-      setRows(strict);
+      
+      // Normalize first 7 days (pre-roll): fill value from common alternates if missing
+      for (let i = 0; i < Math.min(7, strict.length); i++){
+        if (strict[i].value == null){
+          const org = byDate.get(strict[i].date) || {};
+          strict[i].value = (org.value ?? org.actual ?? org.actual_value ?? org.obs ?? org.observed ?? org.y ?? null);
+        }
+      }
+setRows(strict);
       setStatus("");
     } catch(e){ setStatus(String(e.message||e)); }
   }
 
   const sharedYDomain = useMemo(()=>{
     if (!rows || !rows.length) return null;
+    const PREROLL = Math.min(7, rows.length);
+    const preActuals = rows.slice(0, PREROLL).map(r => r?.value).filter(v => v!=null).map(Number);
     const vals = rows.flatMap(r => [
       r?.value, r?.fv,
       r?.ARIMA_M, r?.SES_M, r?.HWES_M,
@@ -460,6 +470,13 @@ setStatus("");
       r?.ci95_low, r?.ci95_high,
       r?.ci90_low, r?.ci90_high
     ]).filter(v => v!=null && Number.isFinite(Number(v))).map(Number);
+    const domainVals = vals.concat(preActuals);
+    if (!domainVals.length) return null;
+    const minv = Math.min(...domainVals);
+    const maxv = Math.max(...domainVals);
+    const pad = (maxv - minv) * 0.08 || 1;
+    return [minv - pad, maxv + pad];
+  }, [rows]);
     if (!vals.length) return null;
     const minv = Math.min(...vals);
     const maxv = Math.max(...vals);
