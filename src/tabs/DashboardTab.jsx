@@ -440,30 +440,30 @@ setStatus("");
     if (!rows || !rows.length) return null;
     const PREROLL = 7;
 
-    // always include first 7 historical actuals (solid pre-roll) in domain
-    const histFirst7 = rows.slice(0, PREROLL)
+    // Explicitly include the first 7 actuals (pre-roll)
+    const preRollActuals = rows
+      .slice(0, PREROLL)
       .map(r => r?.value)
       .filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)))
       .map(Number);
 
-    // include ci95 bounds across the whole series (post-roll interval)
+    // Include ALL actuals too (safety net if pre-roll has gaps)
+    const allActuals = rows
+      .map(r => r?.value)
+      .filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)))
+      .map(Number);
+
+    // Include CI95 bounds anywhere they exist
     const ciBounds = rows.flatMap(r => [r?.ci95_low, r?.ci95_high])
       .filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)))
       .map(Number);
 
-    // fall back to any available actuals if needed
-    const anyActuals = rows
-      .map(r => r?.value)
-      .filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)))
-      .map(Number);
+    const domainVals = [...ciBounds, ...allActuals, ...preRollActuals];
+    if (!domainVals.length) return null;
 
-    const vals = [...ciBounds, ...histFirst7];
-    const base = vals.length ? vals : anyActuals;
-    if (!base.length) return null;
-
-    const minv = Math.min(...base);
-    const maxv = Math.max(...base);
-    const pad = (maxv - minv) * 0.08 || 1; // 8% pad; min 1
+    const minv = Math.min(...domainVals);
+    const maxv = Math.max(...domainVals);
+    const pad = (maxv - minv) * 0.08 || 1; // keep 8% padding; at least 1
     return [minv - pad, maxv + pad];
   }, [rows]);
 
