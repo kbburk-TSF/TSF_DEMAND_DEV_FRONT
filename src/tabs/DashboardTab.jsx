@@ -290,7 +290,7 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
   // ci90 polygon points
   const band85Top = rows.map((r,i) => (r.ci85_low!=null && r.ci85_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci85_high))] : null).filter(Boolean);
   const band85Bot = rows.map((r,i) => (r.ci85_low!=null && r.ci85_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci85_low))]  : null).filter(Boolean).reverse();
-  const polyStr85 = [...band85Top, ...band85Bot].map(([x,y]) => f"{x:.2f},{y:.2f}").join(" ");
+  const polyStr85 = [...band85Top, ...band85Bot].map(([x,y]) => ${x.toFixed(2)},${y.toFixed(2)}).join(" ");
 // ci95 boundary line points
   const ci95HighPts = rows.map((r,i)=>(r.ci95_high!=null && i >= startIdx) ? { i, y:Number(r.ci95_high) } : null).filter(Boolean);
   const ci95LowPts  = rows.map((r,i)=>(r.ci95_low !=null && i >= startIdx) ? { i, y:Number(r.ci95_low)  } : null).filter(Boolean);
