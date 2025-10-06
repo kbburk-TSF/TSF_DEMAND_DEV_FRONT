@@ -408,7 +408,7 @@ setStatus("");
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await __postQuery({ forecast_name:String(forecastId), month:String(startMonth).slice(0,7), span:Number(monthsCount), date_from: ymd(preRollStart), date_to: ymd(end)});
+      const res = await __postQuery({ forecast_name:String(forecastId), month:String(startMonth).slice(0,7), span:Number(monthsCount) , date_from: ymd(preRollStart), date_to: ymd(end)});
 
       const byDate = new Map();
       for (const r of (res.rows||[])){
