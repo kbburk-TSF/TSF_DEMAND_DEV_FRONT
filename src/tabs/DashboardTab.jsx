@@ -444,7 +444,6 @@ setStatus("");
 
   const sharedYDomain = useMemo(()=>{
     if (!rows || !rows.length) return null;
-    // Build a comprehensive set of y-values so pre-roll actuals NEVER get clipped
     const vals = rows.flatMap(r => [
       r?.value, r?.fv,
       r?.low, r?.high,
@@ -452,30 +451,12 @@ setStatus("");
       r?.ci90_low, r?.ci90_high
     ]).filter(v => v!=null && Number.isFinite(Number(v))).map(Number);
     if (!vals.length) return null;
-    const minv = Math.min(...vals), maxv = Math.max(...vals);
+    const minv = Math.min(...vals);
+    const maxv = Math.max(...vals);
     const pad = (maxv - minv) * 0.08 || 1;
     return [minv - pad, maxv + pad];
   }, [rows]);
 
-    // Include ALL actuals too (safety net if pre-roll has gaps)
-    const allActuals = rows
-      .map(r => r?.value)
-      .filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)))
-      .map(Number);
-
-    // Include CI95 bounds anywhere they exist
-    const ciBounds = rows.flatMap(r => [r?.ci95_low, r?.ci95_high])
-      .filter(v => v !== null && v !== undefined && Number.isFinite(Number(v)))
-      .map(Number);
-
-    const domainVals = [...ciBounds, ...allActuals, ...preRollActuals];
-    if (!domainVals.length) return null;
-
-    const minv = Math.min(...domainVals);
-    const maxv = Math.max(...domainVals);
-    const pad = (maxv - minv) * 0.08 || 1; // keep 8% padding; at least 1
-    return [minv - pad, maxv + pad];
-  }, [rows]);
 
   return (
     <div style={{width:"100%"}}>
