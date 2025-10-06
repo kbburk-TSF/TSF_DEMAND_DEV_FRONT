@@ -6,16 +6,45 @@
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
 
-// --- local query poster (no api.js) ---
+// --- minimal backend helpers (no api.js) ---
+import { API_BASE } from "../env.js"; // optional
+const BACKEND = (
+  (typeof window !== "undefined" && window.__BACKEND_URL__) ||
+  (typeof API_BASE !== "undefined" && API_BASE) ||
+  "https://tsf-demand-back.onrender.com"
+).replace(/\/$/, "");
+
+async function __handle(res){
+  if(!res.ok){
+    let t=""; try{ t = await res.text(); } catch {}
+    throw new Error(`HTTP ${res.status}${t ? (": " + t) : ""}`);
+  }
+  return res.json();
+}
+async function __get(path){ return __handle(await fetch(`${BACKEND}${path}`)); }
+
+// list forecast names
+async function listForecastIds(){
+  const data = await __get("/views/forecasts");
+  return Array.isArray(data) ? data.map(String) : [];
+}
+
+// months for a forecast
+async function listMonths(forecast_name){
+  const q = encodeURIComponent(String(forecast_name||""));
+  return await __get(`/views/months?forecast_name=${q}`);
+}
+
+// post query
 async function __postQuery(body){
   const r = await fetch(`${BACKEND}/views/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body || {})
   });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
+  return __handle(r);
 }
+
 
 // ==== helpers ====
 const MS_DAY = 86400000;
