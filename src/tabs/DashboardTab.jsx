@@ -8,7 +8,68 @@
 // - Shorter chart height for single-page fit.
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
-import { listForecastIds, queryView } from "../api.js";
+
+// ---- Local backend helpers with fallbacks (no api.js) ----
+import { API_BASE } from "../env.js"; // optional
+
+const BACKEND = (
+  (typeof window !== "undefined" && window.__BACKEND_URL__) ||
+  (typeof API_BASE !== "undefined" && API_BASE) ||
+  "https://tsf-demand-back.onrender.com"
+).replace(/\/$/, "");
+
+async function _handle(res){
+  if(!res.ok){
+    let t = ""; try{ t = await res.text(); }catch{}
+    throw new Error(`HTTP ${res.status}${t ? (": " + t) : ""}`);
+  }
+  return res.json();
+}
+async function httpGet(path){ return _handle(await fetch(`${BACKEND}${path}`)); }
+
+// Try multiple endpoints until one works
+async function tryEndpoints(paths){
+  let lastErr;
+  for(const p of paths){
+    try { return await httpGet(p); } catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error("No endpoint succeeded");
+}
+
+// Fetch forecast names (strings)
+async function loadForecastNames(){
+  const data = await tryEndpoints([
+    "/views/forecasts",
+    "/views/forecast_ids",
+    "/views/forecast_names",
+    "/views/list"
+  ]);
+  const arr = Array.isArray(data) ? data : [];
+  return arr.map(x => {
+    if (typeof x === "string") return x;
+    if (x && typeof x === "object") {
+      return String(x.name ?? x.forecast_name ?? x.id ?? x.value ?? "");
+    }
+    return String(x ?? "");
+  }).filter(Boolean);
+}
+
+// Fetch months for a forecast (list of 'YYYY-MM')
+async function loadMonthsForForecast(forecastName){
+  const q = encodeURIComponent(String(forecastName || ""));
+  try {
+    // primary: by name
+    return await httpGet(`/views/months?forecast_name=${q}`);
+  } catch(e1){
+    // fallback: some backends expect ?forecast_id=
+    try {
+      return await httpGet(`/views/months?forecast_id=${q}`);
+    } catch(e2){
+      throw e1; // bubble original
+    }
+  }
+}
+
 
 // ==== helpers ====
 const MS_DAY = 86400000;
@@ -317,7 +378,7 @@ export default function DashboardTab(){
   useEffect(() => {
     (async () => {
       try {
-        const list = await listForecastIds({ scope:"global", model:"", series:"" });
+        const list = await loadForecastNames();
         const norm = (Array.isArray(list) ? list : []).map(x => (
           typeof x === "string" ? { id:x, name:x }
           : { id:String(x.id ?? x.value ?? x), name:String(x.name ?? x.label ?? x.id ?? x) }
@@ -332,13 +393,11 @@ export default function DashboardTab(){
     if (!forecastId) return;
     (async () => {
       try {
-        setStatus("Scanning dates…");
-        const res = await queryView({ scope:"global", model:"", series:"", forecast_id: forecastId, date_from:null, date_to:null, page:1, page_size:20000 });
-        const dates = Array.from(new Set((res.rows||[]).map(r => r?.date).filter(Boolean))).sort();
-        const derivedMonths = Array.from(new Set(dates.map(s => s.slice(0,7)))).sort();
-setAllMonths(derivedMonths);
-if (derivedMonths.length) setStartMonth(derivedMonths[0] + "-01");
-        setStatus("");
+        setStatus("Loading months…");
+const months = await loadMonthsForForecast(forecastId);
+setAllMonths(months||[]);
+if ((months||[]).length) setStartMonth(String(months[0]) + "-01");
+setStatus("");
       } catch(e){ setStatus("Failed to scan dates: " + String(e.message||e)); }
     })();
   }, [forecastId]);
