@@ -98,7 +98,7 @@ function useChartMath(rows){
   return { wrapRef, W, H, pad, xScale, innerW, innerH, startIdx, niceTicks };
 }
 
-// Legend component â€” boxed, centered, horizontal
+// Legend component — boxed, centered, horizontal
 function InlineLegend({ items }){
   if (!items || !items.length) return null;
   return (
@@ -288,14 +288,14 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
   const bandBot = rows.map((r,i) => (r.ci95_low!=null && r.ci95_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci95_low))]  : null).filter(Boolean).reverse();
   const polyStr = [...bandTop, ...bandBot].map(([x,y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
   // ci90 polygon points
-  const band90Top = rows.map((r,i) => (r.ci85_low!=null && r.ci85_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci85_high))] : null).filter(Boolean);
-  const band90Bot = rows.map((r,i) => (r.ci85_low!=null && r.ci85_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci85_low))]  : null).filter(Boolean).reverse();
+  const band90Top = rows.map((r,i) => (r.ci90_low!=null && r.ci90_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci90_high))] : null).filter(Boolean);
+  const band90Bot = rows.map((r,i) => (r.ci90_low!=null && r.ci90_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci90_low))]  : null).filter(Boolean).reverse();
   const polyStr90 = [...band90Top, ...band90Bot].map(([x,y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
 // ci95 boundary line points
   const ci95HighPts = rows.map((r,i)=>(r.ci95_high!=null && i >= startIdx) ? { i, y:Number(r.ci95_high) } : null).filter(Boolean);
   const ci95LowPts  = rows.map((r,i)=>(r.ci95_low !=null && i >= startIdx) ? { i, y:Number(r.ci95_low)  } : null).filter(Boolean);
-  const ci90HighPts = rows.map((r,i)=>(r.ci85_high!=null && i >= startIdx) ? { i, y:Number(r.ci85_high) } : null).filter(Boolean);
-  const ci90LowPts  = rows.map((r,i)=>(r.ci85_low !=null && i >= startIdx) ? { i, y:Number(r.ci85_low)  } : null).filter(Boolean);
+  const ci90HighPts = rows.map((r,i)=>(r.ci90_high!=null && i >= startIdx) ? { i, y:Number(r.ci90_high) } : null).filter(Boolean);
+  const ci90LowPts  = rows.map((r,i)=>(r.ci90_low !=null && i >= startIdx) ? { i, y:Number(r.ci90_low)  } : null).filter(Boolean);
   const yTicks = niceTicks(Y0, Y1, 6);
 
   const intervalFill = "rgba(144,238,144,0.22)";
@@ -306,8 +306,8 @@ const intervalFill90 = "rgba(46, 204, 113, 0.32)";
     { label: "Historical Values", type: "line", stroke:"#000", dash:null, width:1.8 },
     { label: "Actuals (for comparison)", type: "line", stroke:"#000", dash:"4,6", width:2.4 },
     { label: "Targeted Seasonal Forecast", type: "line", stroke:fvColor, dash:null, width:2.4 },
-    { label: "95% Confidence Interval", type: "box", fill:intervalFill, stroke:"#2ca02c" },
-{ label: "85% Confidence Interval", type: "box", fill:intervalFill90, stroke:"#2ca02c" },
+    { label: "95% Confidence Forecast Interval", type: "box", fill:intervalFill, stroke:"#2ca02c" },
+{ label: "90% Confidence Forecast Interval", type: "box", fill:intervalFill90, stroke:"#2ca02c" },
   ];
 
   return (
@@ -382,7 +382,7 @@ export default function DashboardTab(){
     if (!forecastId) return;
     (async () => {
       try {
-        setStatus("Loading monthsâ€¦");
+        setStatus("Loading months…");
 try {
   const months = await listMonths(forecastId);
   setAllMonths(months||[]);
@@ -400,7 +400,7 @@ setStatus("");
   async function run(){
     if (!forecastId || !startMonth) return;
     try{
-      setStatus("Loadingâ€¦");
+      setStatus("Loading…");
       const start = firstOfMonthUTC(parseYMD(startMonth));
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
@@ -421,8 +421,8 @@ setStatus("");
           fv: r.fv ?? null,
           low: r.low ?? null,  ci95_low: r.ci95_low ?? null,
           ci95_high: r.ci95_high ?? null,
-          ci90_low: r.ci85_low ?? null,
-          ci90_high: r.ci85_high ?? null,
+          ci90_low: r.ci90_low ?? null,
+          ci90_high: r.ci90_high ?? null,
           ARIMA_M: r["ARIMA_M"] ?? null,
           HWES_M:  r["HWES_M"]  ?? null,
           SES_M:   r["SES_M"]   ?? null
@@ -444,7 +444,7 @@ setStatus("");
 
   return (
     <div style={{width:"100%"}}>
-      <h2 style={{marginTop:0}}>Dashboard â€” Classical + Targeted Seasonal</h2>
+      <h2 style={{marginTop:0}}>Dashboard — Classical + Targeted Seasonal</h2>
 
       <div className="row" style={{alignItems:"end", flexWrap:"wrap"}}>
         <div>
