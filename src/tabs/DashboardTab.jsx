@@ -144,7 +144,7 @@ function MultiClassicalChart({ rows, yDomain }){
   if (yDomain && Number.isFinite(yDomain[0]) && Number.isFinite(yDomain[1])){
     [Y0, Y1] = yDomain;
   } else {
-    const yVals = rows.flatMap(r => [r.value, r["ARIMA_M"], r["SES_M"], r["HWES_M"]]).filter(v => v!=null).map(Number);
+    const yVals = rows.flatMap(r => [r.value, r.ARIMA_M, r.SES_M, r.HWES_M]).filter(v => v!=null).map(Number);
     const yMin = yVals.length ? Math.min(...yVals) : 0;
     const yMax = yVals.length ? Math.max(...yVals) : 1;
     const yPad = (yMax - yMin) * 0.08 || 1;
@@ -284,18 +284,9 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
   const lowPts        = rows.map((r,i) => (r.low!=null   && i >= startIdx) ? { i, y:Number(r.low) }   : null).filter(Boolean);
   const highPts       = rows.map((r,i) => (r.high!=null  && i >= startIdx) ? { i, y:Number(r.high) }  : null).filter(Boolean);
 
-  const bandTop = rows.map((r,i) => (r.ci95_low!=null && r.ci95_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci95_high))] : null).filter(Boolean);
-  const bandBot = rows.map((r,i) => (r.ci95_low!=null && r.ci95_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci95_low))]  : null).filter(Boolean).reverse();
+  const bandTop = rows.map((r,i) => (r.low!=null && r.high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.high))] : null).filter(Boolean);
+  const bandBot = rows.map((r,i) => (r.low!=null && r.high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.low))]  : null).filter(Boolean).reverse();
   const polyStr = [...bandTop, ...bandBot].map(([x,y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
-  // ci90 polygon points
-  const band90Top = rows.map((r,i) => (r.ci90_low!=null && r.ci90_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci90_high))] : null).filter(Boolean);
-  const band90Bot = rows.map((r,i) => (r.ci90_low!=null && r.ci90_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci90_low))]  : null).filter(Boolean).reverse();
-  const polyStr90 = [...band90Top, ...band90Bot].map(([x,y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
-// ci95 boundary line points
-  const ci95HighPts = rows.map((r,i)=>(r.ci95_high!=null && i >= startIdx) ? { i, y:Number(r.ci95_high) } : null).filter(Boolean);
-  const ci95LowPts  = rows.map((r,i)=>(r.ci95_low !=null && i >= startIdx) ? { i, y:Number(r.ci95_low)  } : null).filter(Boolean);
-  const ci90HighPts = rows.map((r,i)=>(r.ci90_high!=null && i >= startIdx) ? { i, y:Number(r.ci90_high) } : null).filter(Boolean);
-  const ci90LowPts  = rows.map((r,i)=>(r.ci90_low !=null && i >= startIdx) ? { i, y:Number(r.ci90_low)  } : null).filter(Boolean);
   const yTicks = niceTicks(Y0, Y1, 6);
 
   const intervalFill = "rgba(144,238,144,0.22)";
@@ -306,8 +297,7 @@ const intervalFill90 = "rgba(46, 204, 113, 0.32)";
     { label: "Historical Values", type: "line", stroke:"#000", dash:null, width:1.8 },
     { label: "Actuals (for comparison)", type: "line", stroke:"#000", dash:"4,6", width:2.4 },
     { label: "Targeted Seasonal Forecast", type: "line", stroke:fvColor, dash:null, width:2.4 },
-    { label: "95% Confidence Forecast Interval", type: "box", fill:intervalFill, stroke:"#2ca02c" },
-{ label: "90% Confidence Forecast Interval", type: "box", fill:intervalFill90, stroke:"#2ca02c" },
+    { label: "Green Zone Forecast Interval", type: "box", fill:intervalFill, stroke:"#2ca02c" },
   ];
 
   return (
@@ -323,11 +313,6 @@ const intervalFill90 = "rgba(46, 204, 113, 0.32)";
         ))}
         <rect x={xScale(0)} y={pad.top} width={Math.max(0, xScale(7)-xScale(0))} height={H-pad.top-pad.bottom} fill="rgba(0,0,0,0.08)"/>
         {polyStr && <polygon points={polyStr} fill={intervalFill} stroke="none" />}
-{polyStr90 && <polygon points={polyStr90} fill={intervalFill90} stroke="none" />}
-<path d={path(ci95HighPts)} fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
-<path d={path(ci95LowPts)}  fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
-<path d={path(ci90HighPts)} fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
-<path d={path(ci90LowPts)}  fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
         <path d={path(histActualPts)} fill="none" stroke="#000" strokeWidth={1.8}/>
         <path d={path(futActualPts)}  fill="none" stroke="#000" strokeWidth={2.4} strokeDasharray="4,6"/>
         <path d={path(fvPts)}         fill="none" stroke={fvColor} strokeWidth={2.4}/>
@@ -419,13 +404,11 @@ setStatus("");
           date: d,
           value: r.value ?? null,
           fv: r.fv ?? null,
-          low: r.low ?? null,  ci95_low: r.ci95_low ?? null,
-          ci95_high: r.ci95_high ?? null,
-          ci90_low: r.ci90_low ?? null,
-          ci90_high: r.ci90_high ?? null,
-          ARIMA_M: r["ARIMA_M"] ?? null,
-          HWES_M:  r["HWES_M"]  ?? null,
-          SES_M:   r["SES_M"]   ?? null
+          low: r.low ?? null,
+          high: r.high ?? null,
+          ARIMA_M: r.ARIMA_M ?? null,
+          HWES_M:  r.HWES_M  ?? null,
+          SES_M:   r.SES_M   ?? null
         };
       });
       setRows(strict);
