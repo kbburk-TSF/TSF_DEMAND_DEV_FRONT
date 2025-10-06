@@ -9,7 +9,7 @@
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
 
-// ==== backend helpers (single source of truth; no api.js) ====
+// --- local backend helpers (no api.js) ---
 import { API_BASE } from "../env.js"; // optional
 const BACKEND = (
   (typeof window !== "undefined" && window.__BACKEND_URL__) ||
@@ -17,51 +17,32 @@ const BACKEND = (
   "https://tsf-demand-back.onrender.com"
 ).replace(/\/$/, "");
 
-async function httpHandle(res){
+async function __handle(res){
   if(!res.ok){
-    let t=""; try{ t=await res.text(); }catch{}
+    let t=""; try{ t = await res.text(); } catch {}
     throw new Error(`HTTP ${res.status}${t ? (": " + t) : ""}`);
   }
   return res.json();
 }
-async function httpGet(path){ return httpHandle(await fetch(`${BACKEND}${path}`)); }
+async function __get(p){ return __handle(await fetch(`${BACKEND}${p}`)); }
 
-async function listForecastIds(){
-  // try common endpoints until one works
-  const candidates = ["/views/forecasts", "/views/forecast_names", "/views/list"];
-  let lastErr;
-  for (const p of candidates){
-    try {
-      const data = await httpGet(p);
-      const arr = Array.isArray(data) ? data : [];
-      return arr.map(x => (typeof x === "string" ? x : String(x?.name ?? x?.forecast_name ?? x?.id ?? ""))).filter(Boolean);
-    } catch(e){ lastErr = e; }
-  }
-  throw lastErr || new Error("No forecast list endpoint");
+export async function listForecastIds(){
+  const data = await __get("/views/forecasts");
+  return Array.isArray(data) ? data.map(String) : [];
 }
-
-async function listMonths(forecast_name){
+export async function listMonths(forecast_name){
   const q = encodeURIComponent(String(forecast_name||""));
-  try { return await httpGet(`/views/months?forecast_name=${q}`); }
-  catch { return await httpGet(`/views/months?forecast_id=${q}`); }
+  return await __get(`/views/months?forecast_name=${q}`);
 }
-
-async function postQueryNormalized({ forecast_name: String(forecastId), month: String(startMonth).slice(0,7), span: Number(monthsCount) }){
+export async function __postQuery(body){
   const r = await fetch(`${BACKEND}/views/query`, {
     method:"POST",
     headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({
-      forecast_name: String(forecast_name||""),
-      month: String(month||"").slice(0,7),
-      span: Number(span||1)
-    })
+    body: JSON.stringify(body||{})
   });
-  return httpHandle(r);
+  return __handle(r);
 }
 
-
-// minimal helper for /views/query (env not touched)
-async function postJSON(u,b){ const r = await fetch(u,{method:"POST",headers:{ "Content-Type":"application/json"}, body: JSON.stringify(b)}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
 
 // ==== helpers ====
 const MS_DAY = 86400000;
@@ -370,7 +351,7 @@ export default function DashboardTab(){
   useEffect(() => {
     (async () => {
       try {
-        const list = await listForecastIds({ scope:"global", model:"", series:"" });
+        const list = await listForecastIds();
         const norm = (Array.isArray(list) ? list : []).map(x => (
           typeof x === "string" ? { id:x, name:x }
           : { id:String(x.id ?? x.value ?? x), name:String(x.name ?? x.label ?? x.id ?? x) }
@@ -394,7 +375,7 @@ try {
   setError(e?.message||String(e));
 }
 setStatus("");
-      } catch(e){ setStatus("Failed to scan dates: " + String(e.message||e)); }
+} catch(e){ setStatus("Failed to scan dates: " + String(e.message||e)); }
     })();
   }, [forecastId]);
 
@@ -408,7 +389,8 @@ setStatus("");
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await postQueryNormalized({ forecast_name: String(forecastId), month: startMonth.slice(0,7), span: Number(monthsCount) });
+      const res = await __postQuery({ forecast_name:String(forecastId), month:String(startMonth).slice(0,7), span:Number(monthsCount) });
+
       const byDate = new Map();
       for (const r of (res.rows||[])){
         if (!r || !r.date) continue;
@@ -421,8 +403,8 @@ setStatus("");
           date: d,
           value: r.value ?? null,
           fv: r.fv ?? null,
-          low: r.ci90_low ?? r.low ?? null,
-          high: r.ci90_high ?? r.high ?? null,
+          low: r.low ?? null,
+          high: r.high ?? null,
           ARIMA_M: r.ARIMA_M ?? null,
           HWES_M:  r.HWES_M  ?? null,
           SES_M:   r.SES_M   ?? null
