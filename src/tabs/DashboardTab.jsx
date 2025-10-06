@@ -288,26 +288,26 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
   const bandBot = rows.map((r,i) => (r.ci95_low!=null && r.ci95_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci95_low))]  : null).filter(Boolean).reverse();
   const polyStr = [...bandTop, ...bandBot].map(([x,y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
   // ci90 polygon points
-  const band90Top = rows.map((r,i) => (r.ci90_low!=null && r.ci90_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci90_high))] : null).filter(Boolean);
-  const band90Bot = rows.map((r,i) => (r.ci90_low!=null && r.ci90_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci90_low))]  : null).filter(Boolean).reverse();
-  const polyStr90 = [...band90Top, ...band90Bot].map(([x,y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
+  const band85Top = rows.map((r,i) => (r.ci85_low!=null && r.ci85_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci85_high))] : null).filter(Boolean);
+  const band85Bot = rows.map((r,i) => (r.ci85_low!=null && r.ci85_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci85_low))]  : null).filter(Boolean).reverse();
+  const polyStr85 = [...band85Top, ...band85Bot].map(([x,y]) => f"{x:.2f},{y:.2f}").join(" ");
 // ci95 boundary line points
   const ci95HighPts = rows.map((r,i)=>(r.ci95_high!=null && i >= startIdx) ? { i, y:Number(r.ci95_high) } : null).filter(Boolean);
   const ci95LowPts  = rows.map((r,i)=>(r.ci95_low !=null && i >= startIdx) ? { i, y:Number(r.ci95_low)  } : null).filter(Boolean);
-  const ci90HighPts = rows.map((r,i)=>(r.ci90_high!=null && i >= startIdx) ? { i, y:Number(r.ci90_high) } : null).filter(Boolean);
-  const ci90LowPts  = rows.map((r,i)=>(r.ci90_low !=null && i >= startIdx) ? { i, y:Number(r.ci90_low)  } : null).filter(Boolean);
+  const ci85HighPts = rows.map((r,i)=>(r.ci85_high!=null && i >= startIdx) ? { i, y:Number(r.ci85_high) } : null).filter(Boolean);
+  const ci85LowPts  = rows.map((r,i)=>(r.ci85_low !=null && i >= startIdx) ? { i, y:Number(r.ci85_low)  } : null).filter(Boolean);
   const yTicks = niceTicks(Y0, Y1, 6);
 
   const intervalFill = "rgba(144,238,144,0.22)";
-const intervalFill90 = "rgba(46, 204, 113, 0.32)";
+const intervalFill85 = "rgba(46, 204, 113, 0.32)";
   const fvColor = "#FFD700";
 
   const legendItems = [
     { label: "Historical Values", type: "line", stroke:"#000", dash:null, width:1.8 },
     { label: "Actuals (for comparison)", type: "line", stroke:"#000", dash:"4,6", width:2.4 },
     { label: "Targeted Seasonal Forecast", type: "line", stroke:fvColor, dash:null, width:2.4 },
-    { label: "95% Confidence Forecast Interval", type: "box", fill:intervalFill, stroke:"#2ca02c" },
-{ label: "90% Confidence Forecast Interval", type: "box", fill:intervalFill90, stroke:"#2ca02c" },
+    { label: "95% Confidence Interval", type: "box", fill:intervalFill, stroke:"#2ca02c" },
+{ label: "85% Confidence Interval", type: "box", fill:intervalFill85, stroke:"#2ca02c" },
   ];
 
   return (
@@ -323,11 +323,11 @@ const intervalFill90 = "rgba(46, 204, 113, 0.32)";
         ))}
         <rect x={xScale(0)} y={pad.top} width={Math.max(0, xScale(7)-xScale(0))} height={H-pad.top-pad.bottom} fill="rgba(0,0,0,0.08)"/>
         {polyStr && <polygon points={polyStr} fill={intervalFill} stroke="none" />}
-{polyStr90 && <polygon points={polyStr90} fill={intervalFill90} stroke="none" />}
+{polyStr85 && <polygon points={polyStr85} fill={intervalFill85} stroke="none" />}
 <path d={path(ci95HighPts)} fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
 <path d={path(ci95LowPts)}  fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
-<path d={path(ci90HighPts)} fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
-<path d={path(ci90LowPts)}  fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
+<path d={path(ci85HighPts)} fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
+<path d={path(ci85LowPts)}  fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
         <path d={path(histActualPts)} fill="none" stroke="#000" strokeWidth={1.8}/>
         <path d={path(futActualPts)}  fill="none" stroke="#000" strokeWidth={2.4} strokeDasharray="4,6"/>
         <path d={path(fvPts)}         fill="none" stroke={fvColor} strokeWidth={2.4}/>
