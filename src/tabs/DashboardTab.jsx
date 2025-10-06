@@ -466,12 +466,6 @@ setStatus("");
     const pad = (maxv - minv) * 0.08 || 1;
     return [minv - pad, maxv + pad];
   }, [rows]);
-    if (!vals.length) return null;
-    const minv = Math.min(...vals);
-    const maxv = Math.max(...vals);
-    const pad = (maxv - minv) * 0.08 || 1;
-    return [minv - pad, maxv + pad];
-  }, [rows]);
 
 
   return (
