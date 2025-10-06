@@ -224,19 +224,24 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
   const lowPts        = rows.map((r,i) => (r.low!=null   && i >= startIdx) ? { i, y:Number(r.low) }   : null).filter(Boolean);
   const highPts       = rows.map((r,i) => (r.high!=null  && i >= startIdx) ? { i, y:Number(r.high) }  : null).filter(Boolean);
 
-  const bandTop = rows.map((r,i) => (r.low!=null && r.high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.high))] : null).filter(Boolean);
-  const bandBot = rows.map((r,i) => (r.low!=null && r.high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.low))]  : null).filter(Boolean).reverse();
+  const bandTop = rows.map((r,i) => (r.ci95_low!=null && r.ci95_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci95_high))] : null).filter(Boolean);
+  const bandBot = rows.map((r,i) => (r.ci95_low!=null && r.ci95_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci95_low))]  : null).filter(Boolean).reverse();
   const polyStr = [...bandTop, ...bandBot].map(([x,y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
+  const band90Top = rows.map((r,i) => (r.ci90_low!=null && r.ci90_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci90_high))] : null).filter(Boolean);
+  const band90Bot = rows.map((r,i) => (r.ci90_low!=null && r.ci90_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci90_low))]  : null).filter(Boolean).reverse();
+  const poly90Str = [...band90Top, ...band90Bot].map(([x,y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
   const yTicks = niceTicks(Y0, Y1, 6);
 
   const intervalFill = "rgba(144,238,144,0.22)";
+  const intervalFill90 = "rgba(46, 204, 113, 0.32)";
   const fvColor = "#FFD700";
 
   const legendItems = [
     { label: "Historical Values", type: "line", stroke:"#000", dash:null, width:1.8 },
     { label: "Actuals (for comparison)", type: "line", stroke:"#000", dash:"4,6", width:2.4 },
     { label: "Targeted Seasonal Forecast", type: "line", stroke:fvColor, dash:null, width:2.4 },
-    { label: "Green Zone Forecast Interval", type: "box", fill:intervalFill, stroke:"#2ca02c" },
+    { label: "95% Confidence Interval", type: "box", fill:intervalFill, stroke:"#2ca02c" },
+{ label: "85% Confidence Interval", type: "box", fill:"rgba(46, 204, 113, 0.60)", stroke:"#2ca02c" },
   ];
 
   return (
@@ -252,6 +257,7 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
         ))}
         <rect x={xScale(0)} y={pad.top} width={Math.max(0, xScale(7)-xScale(0))} height={H-pad.top-pad.bottom} fill="rgba(0,0,0,0.08)"/>
         {polyStr && <polygon points={polyStr} fill={intervalFill} stroke="none" />}
+{poly90Str && <polygon points={poly90Str} fill={intervalFill90} stroke="none" />}
         <path d={path(histActualPts)} fill="none" stroke="#000" strokeWidth={1.8}/>
         <path d={path(futActualPts)}  fill="none" stroke="#000" strokeWidth={2.4} strokeDasharray="4,6"/>
         <path d={path(fvPts)}         fill="none" stroke={fvColor} strokeWidth={2.4}/>
@@ -309,8 +315,11 @@ export default function DashboardTab2(){
         setStatus("Loading months…");
 try {
   const months = await listMonths(forecastId);
-  setAllMonths(months||[]);
-  if ((months||[]).length) setStartMonth(String(months[0]) + "-01");
+  const __parseMonth = (m) => { const [y, mo] = String(m).split("-"); return Date.UTC(Number(y), Number(mo)-1, 1); };
+  const __sorted = (months||[]).slice().sort((a,b)=> __parseMonth(a) - __parseMonth(b));
+  const __last24 = __sorted.slice(-24);
+  setAllMonths(__last24);
+  if (__last24.length) setStartMonth(String(__last24[0]) + "-01");
 } catch (e) {
   setError(e?.message||String(e));
 }
@@ -343,7 +352,10 @@ setStatus("");
           date: d,
           value: r.value ?? null,
           fv: r.fv ?? null,
-          low: r.low ?? null,
+          low: r.low ?? null,  ci95_low: r.ci95_low ?? null,
+          ci95_high: r.ci95_high ?? null,
+          ci90_low: r.ci85_low ?? null,
+          ci90_high: r.ci85_high ?? null,
           high: r.high ?? null,
           ARIMA_M: r["ARIMA_M"] ?? null,
           HWES_M:  r["HWES_M"]  ?? null,
@@ -357,7 +369,7 @@ setStatus("");
 
   const sharedYDomain = useMemo(()=>{
     if (!rows || !rows.length) return null;
-    const vals = rows.flatMap(r => [r.value, r.low, r.high, r.fv]).filter(v => v!=null).map(Number);
+    const vals = rows.flatMap(r => [r.ci95_low, r.ci95_high]).filter(v => v!=null).map(Number);
     if (!vals.length) return null;
     const minv = Math.min(...vals), maxv = Math.max(...vals);
     const pad = (maxv - minv) * 0.08 || 1;
