@@ -209,7 +209,7 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
   if (yDomain && Number.isFinite(yDomain[0]) && Number.isFinite(yDomain[1])){
     [Y0, Y1] = yDomain;
   } else {
-    const yVals = rows.flatMap(r => [r.value, r.low, r.high, r.fv]).filter(v => v!=null).map(Number);
+    const yVals = rows.flatMap(r => [r.value, r.low, r.high, r.fv, r.ci85_low, r.ci85_high, r.ci90_low, r.ci90_high, r.ci95_low, r.ci95_high]).filter(v => v!=null).map(Number);
     const yMin = yVals.length ? Math.min(...yVals) : 0;
     const yMax = yVals.length ? Math.max(...yVals) : 1;
     const yPad = (yMax - yMin) * 0.08 || 1;
@@ -224,19 +224,32 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
   const lowPts        = rows.map((r,i) => (r.low!=null   && i >= startIdx) ? { i, y:Number(r.low) }   : null).filter(Boolean);
   const highPts       = rows.map((r,i) => (r.high!=null  && i >= startIdx) ? { i, y:Number(r.high) }  : null).filter(Boolean);
 
-  const bandTop = rows.map((r,i) => (r.low!=null && r.high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.high))] : null).filter(Boolean);
-  const bandBot = rows.map((r,i) => (r.low!=null && r.high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.low))]  : null).filter(Boolean).reverse();
-  const polyStr = [...bandTop, ...bandBot].map(([x,y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
+    const ci95Top = rows.map((r,i)=>(r.ci95_low!=null && r.ci95_high!=null && i>=startIdx)?[xScale(i), yScale(Number(r.ci95_high))]:null).filter(Boolean);
+  const ci95Bot = rows.map((r,i)=>(r.ci95_low!=null && r.ci95_high!=null && i>=startIdx)?[xScale(i), yScale(Number(r.ci95_low))]:null).filter(Boolean).reverse();
+  const ci95Poly = [...ci95Top, ...ci95Bot].map(([x,y])=>`${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
+
+  const ci90Top = rows.map((r,i)=>(r.ci90_low!=null && r.ci90_high!=null && i>=startIdx)?[xScale(i), yScale(Number(r.ci90_high))]:null).filter(Boolean);
+  const ci90Bot = rows.map((r,i)=>(r.ci90_low!=null && r.ci90_high!=null && i>=startIdx)?[xScale(i), yScale(Number(r.ci90_low))]:null).filter(Boolean).reverse();
+  const ci90Poly = [...ci90Top, ...ci90Bot].map(([x,y])=>`${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
+
+  const ci85Top = rows.map((r,i)=>(r.ci85_low!=null && r.ci85_high!=null && i>=startIdx)?[xScale(i), yScale(Number(r.ci85_high))]:null).filter(Boolean);
+  const ci85Bot = rows.map((r,i)=>(r.ci85_low!=null && r.ci85_high!=null && i>=startIdx)?[xScale(i), yScale(Number(r.ci85_low))]:null).filter(Boolean).reverse();
+  const ci85Poly = [...ci85Top, ...ci85Bot].map(([x,y])=>`${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
   const yTicks = niceTicks(Y0, Y1, 6);
 
-  const intervalFill = "rgba(144,238,144,0.22)";
+  const fill95 = "rgba(46, 204, 113, 0.22)";  // light green
+const fill90 = "rgba(46, 204, 113, 0.32)";  // medium green
+const fill85 = "rgba(46, 204, 113, 0.44)";  // darker-than-medium green
+const strokeGreen = "#0f5c1a";
   const fvColor = "#FFD700";
 
   const legendItems = [
     { label: "Historical Values", type: "line", stroke:"#000", dash:null, width:1.8 },
     { label: "Actuals (for comparison)", type: "line", stroke:"#000", dash:"4,6", width:2.4 },
     { label: "Targeted Seasonal Forecast", type: "line", stroke:fvColor, dash:null, width:2.4 },
-    { label: "Green Zone Forecast Interval", type: "box", fill:intervalFill, stroke:"#2ca02c" },
+    { label: "95% Confidence Forecast Interval", type: "box", fill:fill95, stroke:strokeGreen },
+{ label: "90% Confidence Forecast Interval", type: "box", fill:fill90, stroke:strokeGreen },
+{ label: "85% Confidence Forecast Interval", type: "box", fill:fill85, stroke:strokeGreen },
   ];
 
   return (
@@ -255,9 +268,7 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
         <path d={path(histActualPts)} fill="none" stroke="#000" strokeWidth={1.8}/>
         <path d={path(futActualPts)}  fill="none" stroke="#000" strokeWidth={2.4} strokeDasharray="4,6"/>
         <path d={path(fvPts)}         fill="none" stroke={fvColor} strokeWidth={2.4}/>
-        <path d={path(lowPts)}        fill="none" stroke="#2ca02c" strokeWidth={1.8}/>
-        <path d={path(highPts)}       fill="none" stroke="#2ca02c" strokeWidth={1.8}/>
-        {rows.map((r,i)=>(
+                        {rows.map((r,i)=>(
           <g key={i} transform={`translate(${xScale(i)}, ${H-pad.bottom})`}>
             <line x1={0} y1={0} x2={0} y2={6} stroke="#aaa"/>
             <text x={10} y={0} fontSize="11" fill="#666" transform="rotate(90 10 0)" textAnchor="start">{fmtMDY(r.date)}</text>
@@ -356,7 +367,7 @@ setStatus("");
 
   const sharedYDomain = useMemo(()=>{
     if (!rows || !rows.length) return null;
-    const vals = rows.flatMap(r => [r.value, r.low, r.high, r.fv]).filter(v => v!=null).map(Number);
+    const vals = rows.flatMap(r => [r.value, r.low, r.high, r.fv, r.ci85_low, r.ci85_high, r.ci90_low, r.ci90_high, r.ci95_low, r.ci95_high]).filter(v => v!=null).map(Number);
     if (!vals.length) return null;
     const minv = Math.min(...vals), maxv = Math.max(...vals);
     const pad = (maxv - minv) * 0.08 || 1;
