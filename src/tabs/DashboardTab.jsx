@@ -424,8 +424,8 @@ setStatus("");
           fv: r.fv ?? null,
           low: r.low ?? null,  ci95_low: r.ci95_low ?? null,
           ci95_high: r.ci95_high ?? null,
-          ci90_low: r.ci85_low ?? null,
-          ci90_high: r.ci85_high ?? null,
+          ci90_low: r.ci90_low ?? null,
+          ci90_high: r.ci90_high ?? null,
           ARIMA_M: r["ARIMA_M"] ?? null,
           HWES_M:  r["HWES_M"]  ?? null,
           SES_M:   r["SES_M"]   ?? null
@@ -436,20 +436,21 @@ setStatus("");
     } catch(e){ setStatus(String(e.message||e)); }
   }
 
-  const sharedYDomain = useMemo(() => {
+  const sharedYDomain = useMemo(()=>{
   if (!rows || !rows.length) return null;
   const vals = rows.flatMap(r => [
     r.value, r.fv, r.low, r.high,
     r.ci95_low, r.ci95_high,
     r.ci90_low, r.ci90_high,
     r["ARIMA_M"], r["SES_M"], r["HWES_M"]
-  ]).filter(v => v != null).map(Number);
+  ]).filter(v => v!=null).map(Number);
   if (!vals.length) return null;
   const minv = Math.min(...vals), maxv = Math.max(...vals);
   const pad = (maxv - minv) * 0.08 || 1;
   return [minv - pad, maxv + pad];
 }, [rows]);
-return (
+
+  return (
     <div style={{width:"100%"}}>
       <h2 style={{marginTop:0}}>Dashboard — Classical + Targeted Seasonal</h2>
 
