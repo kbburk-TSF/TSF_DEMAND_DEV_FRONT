@@ -284,8 +284,8 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
   const lowPts        = rows.map((r,i) => (r.low!=null   && i >= startIdx) ? { i, y:Number(r.low) }   : null).filter(Boolean);
   const highPts       = rows.map((r,i) => (r.high!=null  && i >= startIdx) ? { i, y:Number(r.high) }  : null).filter(Boolean);
 
-  const bandTop = rows.map((r,i) => (r.low!=null && r.high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.high))] : null).filter(Boolean);
-  const bandBot = rows.map((r,i) => (r.low!=null && r.high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.low))]  : null).filter(Boolean).reverse();
+  const bandTop = rows.map((r,i) => (r.ci95_low!=null && r.ci95_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci95_high))] : null).filter(Boolean);
+  const bandBot = rows.map((r,i) => (r.ci95_low!=null && r.ci95_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci95_low))]  : null).filter(Boolean).reverse();
   const polyStr = [...bandTop, ...bandBot].map(([x,y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
   const yTicks = niceTicks(Y0, Y1, 6);
 
@@ -403,8 +403,8 @@ setStatus("");
           date: d,
           value: r.value ?? null,
           fv: r.fv ?? null,
-          low: r.low ?? null,
-          high: r.high ?? null,
+          low: r.low ?? null,  ci95_low: r.ci95_low ?? null,
+          ci95_high: r.ci95_high ?? null,
           ARIMA_M: r["ARIMA_M"] ?? null,
           HWES_M:  r["HWES_M"]  ?? null,
           SES_M:   r["SES_M"]   ?? null
