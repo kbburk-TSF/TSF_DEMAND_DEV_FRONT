@@ -5,7 +5,58 @@
 // - Historical actuals on all charts; bottom legend excludes High/Low items.
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
-import { listForecastIds, queryView } from "../api.js";
+
+// ---- Local backend helpers (no api.js) ----
+import { API_BASE } from "../env.js"; // optional
+const BACKEND = (
+  (typeof window !== "undefined" && window.__BACKEND_URL__) ||
+  (typeof API_BASE !== "undefined" && API_BASE) ||
+  "https://tsf-demand-back.onrender.com"
+).replace(/\/$/, "");
+
+async function _handle(res){
+  if(!res.ok){
+    let t=""; try{ t = await res.text(); } catch{}
+    throw new Error(`HTTP ${res.status}${t ? (": " + t) : ""}`);
+  }
+  return res.json();
+}
+async function httpGet(p){ return _handle(await fetch(`${BACKEND}${p}`)); }
+async function httpPost(p, body){
+  return _handle(await fetch(`${BACKEND}${p}`, {
+    method:"POST", headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(body||{})
+  }));
+}
+
+async function listForecastIds(){
+  // Try multiple endpoints so we don't 404.
+  let lastErr;
+  for (const path of ["/views/forecasts", "/views/forecast_names", "/views/list"]) {
+    try {
+      const data = await httpGet(path);
+      return (Array.isArray(data) ? data : []).map(String).filter(Boolean);
+    } catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error("Could not load forecast list");
+}
+async function listMonths(forecast_name){
+  const q = encodeURIComponent(String(forecast_name||""));
+  try {
+    return await httpGet(`/views/months?forecast_name=${q}`);
+  } catch(e){
+    // fallback to id param, if backend uses it
+    return await httpGet(`/views/months?forecast_id=${q}`);
+  }
+}
+async function __postQuery({ forecast_name, month, span }){
+  return await httpPost("/views/query", {
+    forecast_name: String(forecast_name||""),
+    month: String(month||"").slice(0,7),
+    span: Number(span||1)
+  });
+}
+
 
 // ==== helpers ====
 const MS_DAY = 86400000;
@@ -257,7 +308,7 @@ export default function DashboardTab2(){
   useEffect(() => {
     (async () => {
       try {
-        const list = await listForecastIds({ scope:"global", model:"", series:"" });
+        const list = await listForecastIds();
         const norm = (Array.isArray(list) ? list : []).map(x => (
           typeof x === "string" ? { id:x, name:x }
           : { id:String(x.id ?? x.value ?? x), name:String(x.name ?? x.label ?? x.id ?? x) }
@@ -272,13 +323,11 @@ export default function DashboardTab2(){
     if (!forecastId) return;
     (async () => {
       try {
-        setStatus("Scanning dates…");
-        const res = await queryView({ scope:"global", model:"", series:"", forecast_id: forecastId, date_from:null, date_to:null, page:1, page_size:20000 });
-        const dates = Array.from(new Set((res.rows||[]).map(r => r?.date).filter(Boolean))).sort();
-        const months = Array.from(new Set(dates.map(s => s.slice(0,7)))).sort();
-        setAllMonths(months);
-        if (months.length) setStartMonth(months[0] + "-01");
-        setStatus("");
+        setStatus("Loading months…");
+const months = await listMonths(forecastId);
+setAllMonths(months||[]);
+if ((months||[]).length) setStartMonth(String(months[0]) + "-01");
+setStatus("");
       } catch(e){ setStatus("Failed to scan dates: " + String(e.message||e)); }
     })();
   }, [forecastId]);
@@ -293,7 +342,7 @@ export default function DashboardTab2(){
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await queryView({
+      const res = await __postQuery({
         scope:"global", model:"", series:"",
         forecast_id: String(forecastId),
         date_from: ymd(preRollStart),
