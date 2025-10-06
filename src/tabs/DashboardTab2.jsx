@@ -6,44 +6,56 @@
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
 
-// BACKEND resolver (in case it's missing)
-import { API_BASE } from "../env.js";
+// ==== backend helpers (single source of truth; no api.js) ====
+import { API_BASE } from "../env.js"; // optional
 const BACKEND = (
-
-// --- robust query poster (accepts many input shapes) ---
-async function __postQuery(body){
-  const b = body || {};
-  const forecast_name = String(
-    b.forecast_name ?? b.forecastName ?? b.forecast ?? b.name ?? b.id ?? b.forecast_id ?? b.forecastId ?? ""
-  );
-  const rawMonth = String(
-    b.month ?? b.startMonth ?? b.start_month ?? b.start ?? b.from ?? ""
-  );
-  const month = rawMonth ? rawMonth.slice(0,7) : "";
-  const span = Number(b.span ?? b.monthsCount ?? b.months ?? b.count ?? 1);
-
-  if (!forecast_name || !month) {
-    throw new Error("HTTP 400: normalized forecast_name and month are required");
-  }
-
-  const r = await fetch(`${BACKEND}/views/query`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ forecast_name, month, span })
-  });
-  if (!r.ok) {
-    let t = ""; try { t = await r.text(); } catch {}
-    throw new Error(`HTTP ${r.status}${t ? (": " + t) : ""}`);
-  }
-  return r.json();
-}
-
   (typeof window !== "undefined" && window.__BACKEND_URL__) ||
   (typeof API_BASE !== "undefined" && API_BASE) ||
   "https://tsf-demand-back.onrender.com"
 ).replace(/\/$/, "");
 
-import { listForecastIds, queryView } from "../api.js";
+async function httpHandle(res){
+  if(!res.ok){
+    let t=""; try{ t=await res.text(); }catch{}
+    throw new Error(`HTTP ${res.status}${t ? (": " + t) : ""}`);
+  }
+  return res.json();
+}
+async function httpGet(path){ return httpHandle(await fetch(`${BACKEND}${path}`)); }
+
+async function listForecastIds(){
+  // try common endpoints until one works
+  const candidates = ["/views/forecasts", "/views/forecast_names", "/views/list"];
+  let lastErr;
+  for (const p of candidates){
+    try {
+      const data = await httpGet(p);
+      const arr = Array.isArray(data) ? data : [];
+      return arr.map(x => (typeof x === "string" ? x : String(x?.name ?? x?.forecast_name ?? x?.id ?? ""))).filter(Boolean);
+    } catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error("No forecast list endpoint");
+}
+
+async function listMonths(forecast_name){
+  const q = encodeURIComponent(String(forecast_name||""));
+  try { return await httpGet(`/views/months?forecast_name=${q}`); }
+  catch { return await httpGet(`/views/months?forecast_id=${q}`); }
+}
+
+async function postQueryNormalized({ forecast_name: String(forecastId), month: String(startMonth).slice(0,7), span: Number(monthsCount) }){
+  const r = await fetch(`${BACKEND}/views/query`, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      forecast_name: String(forecast_name||""),
+      month: String(month||"").slice(0,7),
+      span: Number(span||1)
+    })
+  });
+  return httpHandle(r);
+}
+
 
 // ==== helpers ====
 const MS_DAY = 86400000;
@@ -310,13 +322,15 @@ export default function DashboardTab2(){
     if (!forecastId) return;
     (async () => {
       try {
-        setStatus("Scanning dates…");
-        const res = await __postQuery({ scope:"global", model:"", series:"", forecast_id: forecastId, date_from:null, date_to:null, page:1, page_size:20000 });
-        const dates = Array.from(new Set((res.rows||[]).map(r => r?.date).filter(Boolean))).sort();
-        const months = Array.from(new Set(dates.map(s => s.slice(0,7)))).sort();
-        setAllMonths(months);
-        if (months.length) setStartMonth(months[0] + "-01");
-        setStatus("");
+        setStatus("Loading months…");
+try {
+  const months = await listMonths(forecastId);
+  setAllMonths(months||[]);
+  if ((months||[]).length) setStartMonth(String(months[0]) + "-01");
+} catch (e) {
+  setError(e?.message||String(e));
+}
+setStatus("");
       } catch(e){ setStatus("Failed to scan dates: " + String(e.message||e)); }
     })();
   }, [forecastId]);
@@ -331,14 +345,7 @@ export default function DashboardTab2(){
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await __postQuery({
-        scope:"global", model:"", series:"",
-        forecast_id: String(forecastId),
-        date_from: ymd(preRollStart),
-        date_to: ymd(end),
-        page:1, page_size: 20000
-      });
-
+      const res = await postQueryNormalized({ forecast_name: String(forecastId), month: startMonth.slice(0,7), span: Number(monthsCount) });
       const byDate = new Map();
       for (const r of (res.rows||[])){
         if (!r || !r.date) continue;
@@ -351,8 +358,8 @@ export default function DashboardTab2(){
           date: d,
           value: r.value ?? null,
           fv: r.fv ?? null,
-          low: r.low ?? null,
-          high: r.high ?? null,
+          low: r.ci90_low ?? r.low ?? null,
+          high: r.ci90_high ?? r.high ?? null,
           ARIMA_M: r.ARIMA_M ?? null,
           HWES_M:  r.HWES_M  ?? null,
           SES_M:   r.SES_M   ?? null
