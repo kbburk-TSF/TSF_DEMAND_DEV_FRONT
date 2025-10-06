@@ -99,15 +99,9 @@ function useChartMath(rows){
         <path d={path(fvPts)}         fill="none" stroke={fvColor} strokeWidth={2.4}/>
         {rows.map((r,i)=>(
           <g key={i} transform={`translate(${xScale(startIdx) - xScale(0)} y={pad.top} width={Math.max(0, xScale(startIdx) - xScale(0))} height={H-pad.top-pad.bottom} fill="rgba(0,0,0,0.08)"/>
-        {ci95Poly && <polygon points={ci95Poly} fill={fill95} stroke="none" />}
-{ci90Poly && <polygon points={ci90Poly} fill={fill90} stroke="none" />}
-{ci85Poly && <polygon points={ci85Poly} fill={fill85} stroke="none" />}
-<path d={path(ci95HighPts)} fill="none" stroke={strokeGreen} strokeWidth={1.6}/>
-<path d={path(ci95LowPts)}  fill="none" stroke={strokeGreen} strokeWidth={1.6}/>
-<path d={path(ci90HighPts)} fill="none" stroke={strokeGreen} strokeWidth={1.6}/>
-<path d={path(ci90LowPts)}  fill="none" stroke={strokeGreen} strokeWidth={1.6}/>
-<path d={path(ci85HighPts)} fill="none" stroke={strokeGreen} strokeWidth={1.6}/>
-<path d={path(ci85LowPts)}  fill="none" stroke={strokeGreen} strokeWidth={1.6}/>
+        {polyStr && <polygon points={polyStr} fill={intervalFill} stroke="none" />}
+<path d={path(lowPts)}        fill="none" stroke="#2ca02c" strokeWidth={1.8}/>
+<path d={path(highPts)}       fill="none" stroke="#2ca02c" strokeWidth={1.8}/>
         <path d={path(histActualPts)} fill="none" stroke="#000" strokeWidth={1.8}/>
         <path d={path(futActualPts)}  fill="none" stroke="#000" strokeWidth={2.4} strokeDasharray="4,6"/>
         <path d={path(fvPts)}         fill="none" stroke={fvColor} strokeWidth={2.4}/>
@@ -211,7 +205,7 @@ setStatus("");
 
   const sharedYDomain = useMemo(()=>{
     if (!rows || !rows.length) return null;
-    const vals = rows.flatMap(r => [r.value, r.low, r.high, r.fv, r.ci85_low, r.ci85_high, r.ci90_low, r.ci90_high, r.ci95_low, r.ci95_high]).filter(v => v!=null).map(Number);
+    const vals = rows.flatMap(r => [r.value, r.low, r.high, r.fv]).filter(v => v!=null).map(Number);
     if (!vals.length) return null;
     const minv = Math.min(vals), maxv = Math.max(vals);
     const pad = (maxv - minv) * 0.08 || 1;
