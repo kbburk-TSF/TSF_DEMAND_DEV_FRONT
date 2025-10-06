@@ -8,7 +8,6 @@
 // - Shorter chart height for single-page fit.
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
-
 import { listForecastIds, queryView } from "../api.js";
 
 // ==== helpers ====
@@ -354,7 +353,14 @@ export default function DashboardTab(){
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await postJSON("/views/query", { forecast_name: String(forecastId), month: startMonth.slice(0,7), span: Number(monthsCount) });
+      const res = await queryView({
+        scope:"global", model:"", series:"",
+        forecast_id: String(forecastId),
+        date_from: ymd(preRollStart),
+        date_to: ymd(end),
+        page:1, page_size: 20000
+      });
+
       const byDate = new Map();
       for (const r of (res.rows||[])){
         if (!r || !r.date) continue;
@@ -367,8 +373,8 @@ export default function DashboardTab(){
           date: d,
           value: r.value ?? null,
           fv: r.fv ?? null,
-          low: r.ci90_low ?? r.low ?? null,
-          high: r.ci90_high ?? r.high ?? null,
+          low: r.low ?? null,
+          high: r.high ?? null,
           ARIMA_M: r.ARIMA_M ?? null,
           HWES_M:  r.HWES_M  ?? null,
           SES_M:   r.SES_M   ?? null
