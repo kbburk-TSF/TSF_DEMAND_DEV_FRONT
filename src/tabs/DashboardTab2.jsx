@@ -7,43 +7,57 @@
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
 
 // ---- Local backend helpers (no api.js) ----
-import { API_BASE } from "../env.js"; // ok if present
-
+import { API_BASE } from "../env.js"; // optional
 const BACKEND = (
   (typeof window !== "undefined" && window.__BACKEND_URL__) ||
   (typeof API_BASE !== "undefined" && API_BASE) ||
   "https://tsf-demand-back.onrender.com"
 ).replace(/\/$/, "");
 
-async function _handle(res) {
-  if (!res.ok) {
-    let msg = "";
-    try { msg = await res.text(); } catch {}
-    throw new Error(`HTTP ${res.status}${msg ? `: ${msg}` : ""}`);
+async function _handle(res){
+  if(!res.ok){
+    let t = ""; try{ t = await res.text(); }catch{}
+    throw new Error(`HTTP ${res.status}${t and (": "+t)}`);
   }
   return res.json();
 }
-async function getJSON(path)  { return _handle(await fetch(`${BACKEND}${path}`)); }
-async function postJSON(path, body) {
-  return _handle(await fetch(`${BACKEND}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body || {})
+async function getJSON(path){ return _handle(await fetch(`${BACKEND}${path}`)); }
+${path}`,{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(body||{})
   }));
 }
 
-// API-parity helpers expected by these tabs
-async function listForecastIds(){ const data = await getJSON("/views/forecasts"); return Array.isArray(data) ? data.map(String) : []; }
-async function listMonths(forecast_name){ const q = encodeURIComponent(String(forecast_name||"")); return await getJSON(`/views/months?forecast_name=${q}`); }
-async function queryView({ forecast_name, month, span }){
-  return await postJSON("/views/query", {
+// Backend endpoints we will use
+async function listForecastIds(){ return await getJSON("/views/forecasts"); }
+async function listMonths(forecast_name){
+  const q = encodeURIComponent(String(forecast_name||""));
+  return await getJSON(`/views/months?forecast_name=${q}`);
+}
+async function fetchRows({ forecast_name, month, span }){
+  // month must be 'YYYY-MM'
+  const data = await postJSON("/views/query", {
     forecast_name: String(forecast_name||""),
     month: String(month||"").slice(0,7),
     span: Number(span||1)
   });
+  // Normalize rows to expected shape
+  const rows = Array.isArray(data?.rows) ? data.rows : (Array.isArray(data) ? data : []);
+  return rows.map(r=>({
+    date: r.date,
+    value: r.value ?? null,
+    fv: r.fv ?? null,
+    low: r.low ?? null,
+    high: r.high ?? null,
+    ARIMA_M: r.ARIMA_M ?? null,
+    HWES_M: r.HWES_M ?? null,
+    SES_M: r.SES_M ?? null
+  }));
 }
 
 
+// ==== helpers ====
 const MS_DAY = 86400000;
 function parseYMD(s){ return new Date(s + "T00:00:00Z"); }
 function ymd(d){ return d.toISOString().slice(0,10); }
@@ -293,7 +307,7 @@ export default function DashboardTab2(){
   useEffect(() => {
     (async () => {
       try {
-        const list = await listForecastIds({ scope:"global", model:"", series:"" });
+        const list = await listForecastIds();
         const norm = (Array.isArray(list) ? list : []).map(x => (
           typeof x === "string" ? { id:x, name:x }
           : { id:String(x.id ?? x.value ?? x), name:String(x.name ?? x.label ?? x.id ?? x) }
@@ -308,13 +322,11 @@ export default function DashboardTab2(){
     if (!forecastId) return;
     (async () => {
       try {
-        setStatus("Scanning dates…");
-        const res = await queryView({ scope:"global", model:"", series:"", forecast_id: forecastId, date_from:null, date_to:null, page:1, page_size:20000 });
-        const dates = Array.from(new Set((res.rows||[]).map(r => r?.date).filter(Boolean))).sort();
-        const months = Array.from(new Set(dates.map(s => s.slice(0,7)))).sort();
-        setAllMonths(months);
-        if (months.length) setStartMonth(months[0] + "-01");
-        setStatus("");
+        setStatus("Loading months…");
+const months = await listMonths(forecastId);
+setAllMonths(months||[]);
+if ((months||[]).length) setStartMonth(String(months[0]) + "-01");
+setStatus("");
       } catch(e){ setStatus("Failed to scan dates: " + String(e.message||e)); }
     })();
   }, [forecastId]);
@@ -329,28 +341,9 @@ export default function DashboardTab2(){
       const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
-      const res = await postJSON("/views/query", { forecast_name: String(forecastId), month: startMonth.slice(0,7), span: Number(monthsCount) });
-      const byDate = new Map();
-      for (const r of (res.rows||[])){
-        if (!r || !r.date) continue;
-        byDate.set(r.date, r);
-      }
-      const days = daysBetweenUTC(preRollStart, end);
-      const strict = days.map(d => {
-        const r = byDate.get(d) || {};
-        return {
-          date: d,
-          value: r.value ?? null,
-          fv: r.fv ?? null,
-          low: r.ci90_low ?? r.low ?? null,
-          high: r.ci90_high ?? r.high ?? null,
-          ARIMA_M: r.ARIMA_M ?? null,
-          HWES_M:  r.HWES_M  ?? null,
-          SES_M:   r.SES_M   ?? null
-        };
-      });
-      setRows(strict);
-      setStatus("");
+      const rows = await fetchRows({ forecast_name: forecastId, month: String(startMonth).slice(0,7), span: monthsCount });
+setRows(rows);
+setStatus("");
     } catch(e){ setStatus(String(e.message||e)); }
   }
 
