@@ -6,9 +6,7 @@
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
 
-// minimal helper for /views/query (env not touched)
-, body: JSON.stringify(b)}); if(!r.ok) throw new Error(await r.text()); return r.json(); }
-import { listForecastIds, queryView, postJSON } from "../api.js";
+import { listForecastIds, postJSON, queryView } from "../api.js";
 
 // ==== helpers ====
 const MS_DAY = 86400000;
