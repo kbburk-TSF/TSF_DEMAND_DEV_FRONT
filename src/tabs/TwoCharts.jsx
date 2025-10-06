@@ -344,9 +344,9 @@ setStatus("");
           fv: r.fv ?? null,
           low: r.low ?? null,
           high: r.high ?? null,
-          ARIMA_M: r.ARIMA_M ?? null,
-          HWES_M:  r.HWES_M  ?? null,
-          SES_M:   r.SES_M   ?? null
+          ARIMA_M: r["ARIMA_M"] ?? null,
+HWES_M: r["HWES_M"] ?? null,
+SES_M: r["SES_M"] ?? null
         };
       });
       setRows(strict);
