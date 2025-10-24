@@ -1,16 +1,11 @@
 // src/tabs/ChartsTab.jsx
-// v14 — responsive chart, gold FV, dashed future actuals, boxed inline legend (aligned with TwoCharts)
+// Minimal update — add Actuals line to existing chart and update legend (no other visual changes)
 //
-// Changes from v13:
-// - Responsive sizing via ResizeObserver (same pattern as TwoCharts.jsx)
-// - Actuals split: solid black for historical; dashed black for future (post preroll)
-// - Gold FV line (#FFD700) to match Gold Line conventions
-// - InlineLegend: boxed, centered, horizontal (same UI component style as TwoCharts.jsx)
-// - Legend items updated and consistent: Historical Values, Actuals (for comparison), Targeted Seasonal Forecast,
-//   Forecast Interval (light gold), Historical (pre-roll shading)
-// - Maintains existing data source (listForecastIds/queryView) and low/high polygon from v13
+// What changed:
+// - Draws a single black "Actuals" line using `value` across the full range.
+// - Legend now includes "Actuals".
 //
-// NOTE: This file is designed to be a drop-in replacement for src/tabs/ChartsTab.jsx.
+// Everything else (FV gold line, interval band, highs/lows, layout, queries) remains unchanged.
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
 import { listForecastIds, queryView } from "../api.js";
@@ -25,7 +20,7 @@ function addMonthsUTC(d, n){ return new Date(Date.UTC(d.getUTCFullYear(), d.getU
 function fmtMDY(s){ const d=parseYMD(s); const mm=d.getUTCMonth()+1, dd=d.getUTCDate(), yy=String(d.getUTCFullYear()).slice(-2); return `${mm}/${dd}/${yy}`; }
 function daysBetweenUTC(a,b){ const out=[]; let t=a.getTime(); while (t<=b.getTime()+1e-3){ out.push(ymd(new Date(t))); t+=MS_DAY; } return out; }
 
-// Hook: measure container width (and re-render on resize) — same pattern used in TwoCharts.jsx
+// Hook: measure container width
 function useContainerWidth(){
   const ref = useRef(null);
   const [w, setW] = useState(0);
@@ -46,7 +41,7 @@ function useContainerWidth(){
   return [ref, w];
 }
 
-// Legend component — boxed, centered, horizontal (mirrors TwoCharts.jsx style)
+// Legend component — boxed, centered, horizontal
 function InlineLegend({ items }){
   if (!items || !items.length) return null;
   return (
@@ -129,13 +124,12 @@ export default function ChartsTab(){
     try{
       setStatus("Loading…");
       const start = firstOfMonthUTC(parseYMD(startMonth));
-      const preRollStart = new Date(start.getTime() - 7*MS_DAY);
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
       const res = await queryView({
         scope:"global", model:"", series:"",
         forecast_id: forecastId,
-        date_from: ymd(preRollStart),
+        date_from: ymd(start),
         date_to: ymd(end),
         page:1, page_size: 20000
       });
@@ -145,7 +139,7 @@ export default function ChartsTab(){
         if (!r || !r.date) continue;
         byDate.set(r.date, r);
       }
-      const days = daysBetweenUTC(preRollStart, end);
+      const days = daysBetweenUTC(start, end);
       const strict = days.map(d => {
         const r = byDate.get(d) || {};
         return {
@@ -195,17 +189,15 @@ export default function ChartsTab(){
   );
 }
 
-// ===== Responsive index-based SVG chart (matches TwoCharts.jsx behaviors) =====
+// ===== SVG chart =====
 function SpecChart({ rows }){
   if (!rows || !rows.length) return null;
 
   const [wrapRef, W] = useContainerWidth();
-  const H = Math.max(260, Math.min(420, Math.round(W * 0.28))); // a bit taller than TwoCharts
+  const H = Math.max(260, Math.min(420, Math.round(W * 0.28)));
   const pad = { top: 32, right: 24, bottom: 112, left: 80 };
 
-  const N = rows.length;           // 7 pre-roll + month days
-  const startIdx = 7;              // forecast begins after 7 pre-roll days
-
+  const N = rows.length;
   const innerW = Math.max(1, W - pad.left - pad.right);
   const innerH = Math.max(1, H - pad.top - pad.bottom);
 
@@ -219,15 +211,15 @@ function SpecChart({ rows }){
 
   const path = pts => pts.length ? pts.map((p,i)=>(i?"L":"M")+xScale(p.i)+" "+yScale(p.y)).join(" ") : "";
 
-  // series points
-      const fvPts         = rows.map((r,i) => (r.fv!=null    && i >= startIdx) ? { i, y:Number(r.fv) }    : null).filter(Boolean);
-  const lowPts        = rows.map((r,i) => (r.low!=null   && i >= startIdx) ? { i, y:Number(r.low) }   : null).filter(Boolean);
-  const highPts       = rows.map((r,i) => (r.high!=null  && i >= startIdx) ? { i, y:Number(r.high) }  : null).filter(Boolean);
-const actualPts     = rows.map((r,i) => (r.value!=null) ? { i, y:Number(r.value) } : null).filter(Boolean);
+  // points
+  const actualPts     = rows.map((r,i) => (r.value!=null) ? { i, y:Number(r.value) } : null).filter(Boolean);
+  const fvPts         = rows.map((r,i) => (r.fv!=null)    ? { i, y:Number(r.fv) }    : null).filter(Boolean);
+  const lowPts        = rows.map((r,i) => (r.low!=null)   ? { i, y:Number(r.low) }   : null).filter(Boolean);
+  const highPts       = rows.map((r,i) => (r.high!=null)  ? { i, y:Number(r.high) }  : null).filter(Boolean);
 
-  // forecast interval polygon (light gold like v13)
-  const bandTop = rows.map((r,i) => (r.low!=null && r.high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.high))] : null).filter(Boolean);
-  const bandBot = rows.map((r,i) => (r.low!=null && r.high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.low))]  : null).filter(Boolean).reverse();
+  // interval polygon
+  const bandTop = rows.map((r,i) => (r.low!=null && r.high!=null) ? [xScale(i), yScale(Number(r.high))] : null).filter(Boolean);
+  const bandBot = rows.map((r,i) => (r.low!=null && r.high!=null) ? [xScale(i), yScale(Number(r.low))]  : null).filter(Boolean).reverse();
   const polyStr = [...bandTop, ...bandBot].map(([x,y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
 
   function niceTicks(min, max, count=6){
@@ -244,8 +236,8 @@ const actualPts     = rows.map((r,i) => (r.value!=null) ? { i, y:Number(r.value)
   }
   const yTicks = niceTicks(Y0, Y1, 6);
 
-  const FV_COLOR = "#FFD700"; // gold line to match TwoCharts
-  const INTERVAL_FILL = "rgba(255,215,0,0.22)"; // light gold band
+  const FV_COLOR = "#FFD700";
+  const INTERVAL_FILL = "rgba(255,215,0,0.22)";
 
   const legendItems = [
     { label: "Actuals", type: "line", stroke:"#000", dash:null, width:2.0 },
@@ -268,13 +260,12 @@ const actualPts     = rows.map((r,i) => (r.value!=null) ? { i, y:Number(r.value)
           </g>
         ))}
 
-        {/* pre-roll shade (exact 7 days) */}
-
-        {/* forecast interval polygon */}
+        {/* interval polygon */}
         {polyStr && <polygon points={polyStr} fill={INTERVAL_FILL} stroke="none" />}
 
-        {/* series */}<path d={path(actualPts)}     fill="none" stroke="#000" strokeWidth={2.0}/>
-                <path d={path(fvPts)}         fill="none" stroke={FV_COLOR} strokeWidth={2.4}/>
+        {/* series */}
+        <path d={path(actualPts)}     fill="none" stroke="#000" strokeWidth={2.0}/>
+        <path d={path(fvPts)}         fill="none" stroke={FV_COLOR} strokeWidth={2.4}/>
         <path d={path(lowPts)}        fill="none" stroke="#2ca02c" strokeWidth={1.8}/>
         <path d={path(highPts)}       fill="none" stroke="#2ca02c" strokeWidth={1.8}/>
 
@@ -287,7 +278,6 @@ const actualPts     = rows.map((r,i) => (r.value!=null) ? { i, y:Number(r.value)
         ))}
       </svg>
 
-      {/* boxed inline legend */}
       <InlineLegend items={legendItems} />
     </div>
   );
