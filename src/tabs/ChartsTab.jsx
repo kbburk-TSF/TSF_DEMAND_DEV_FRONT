@@ -1,9 +1,10 @@
 // src/tabs/ChartsTab.jsx
 // Minimal update — add Actuals line to existing chart and update legend (no other visual changes)
 //
-// What changed:
-// - Draws a single black "Actuals" line using `value` across the full range.
-// - Legend now includes "Actuals".
+// What changed (10/24/2025):
+// - Draws a single black "Actuals (for comparison)" line using `value` across the full range.
+// - Uses a dotted stroke (dash pattern) for Actuals in both chart and legend.
+// - Legend label now reads: "Actuals (for comparison)".
 //
 // Everything else (FV gold line, interval band, highs/lows, layout, queries) remains unchanged.
 
@@ -240,7 +241,7 @@ function SpecChart({ rows }){
   const INTERVAL_FILL = "rgba(255,215,0,0.22)";
 
   const legendItems = [
-    { label: "Actuals", type: "line", stroke:"#000", dash:null, width:2.0 },
+    { label: "Actuals (for comparison)", type: "line", stroke:"#000", dash:"4 4", width:2.0 },
     { label: "Targeted Seasonal Forecast", type: "line", stroke:FV_COLOR, dash:null, width:2.4 },
     { label: "Forecast Interval", type: "box", fill:INTERVAL_FILL, stroke:"#2ca02c" },
   ];
@@ -264,7 +265,7 @@ function SpecChart({ rows }){
         {polyStr && <polygon points={polyStr} fill={INTERVAL_FILL} stroke="none" />}
 
         {/* series */}
-        <path d={path(actualPts)}     fill="none" stroke="#000" strokeWidth={2.0}/>
+        <path d={path(actualPts)}     fill="none" stroke="#000" strokeWidth={2.0} strokeDasharray="4 4"/>
         <path d={path(fvPts)}         fill="none" stroke={FV_COLOR} strokeWidth={2.4}/>
         <path d={path(lowPts)}        fill="none" stroke="#2ca02c" strokeWidth={1.8}/>
         <path d={path(highPts)}       fill="none" stroke="#2ca02c" strokeWidth={1.8}/>
