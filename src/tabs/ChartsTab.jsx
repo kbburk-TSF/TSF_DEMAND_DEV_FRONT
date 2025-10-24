@@ -198,6 +198,7 @@ function SpecChart({ rows }){
   const pad = { top: 32, right: 24, bottom: 112, left: 80 };
 
   const N = rows.length;
+  const startIdx = 7;
   const innerW = Math.max(1, W - pad.left - pad.right);
   const innerH = Math.max(1, H - pad.top - pad.bottom);
 
@@ -212,7 +213,8 @@ function SpecChart({ rows }){
   const path = pts => pts.length ? pts.map((p,i)=>(i?"L":"M")+xScale(p.i)+" "+yScale(p.y)).join(" ") : "";
 
   // points
-  const actualPts     = rows.map((r,i) => (r.value!=null) ? { i, y:Number(r.value) } : null).filter(Boolean);
+  const histActualPts = rows.map((r,i) => (r.value!=null && i < startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
+  const futActualPts  = rows.map((r,i) => (r.value!=null && i >= startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
   const fvPts         = rows.map((r,i) => (r.fv!=null)    ? { i, y:Number(r.fv) }    : null).filter(Boolean);
   const lowPts        = rows.map((r,i) => (r.low!=null)   ? { i, y:Number(r.low) }   : null).filter(Boolean);
   const highPts       = rows.map((r,i) => (r.high!=null)  ? { i, y:Number(r.high) }  : null).filter(Boolean);
@@ -240,7 +242,8 @@ function SpecChart({ rows }){
   const INTERVAL_FILL = "rgba(255,215,0,0.22)";
 
   const legendItems = [
-    { label: "Actuals", type: "line", stroke:"#000", dash:null, width:2.0 },
+    { label: "Historical Values", type: "line", stroke:"#000", dash:null, width:1.8 },
+    { label: "Actuals (for comparison)", type: "line", stroke:"#000", dash:"4,6", width:2.4 },
     { label: "Targeted Seasonal Forecast", type: "line", stroke:FV_COLOR, dash:null, width:2.4 },
     { label: "Forecast Interval", type: "box", fill:INTERVAL_FILL, stroke:"#2ca02c" },
   ];
@@ -263,9 +266,9 @@ function SpecChart({ rows }){
         {/* interval polygon */}
         {polyStr && <polygon points={polyStr} fill={INTERVAL_FILL} stroke="none" />}
 
-        {/* series */}
-        <path d={path(actualPts)}     fill="none" stroke="#000" strokeWidth={2.0}/>
-        <path d={path(fvPts)}         fill="none" stroke={FV_COLOR} strokeWidth={2.4}/>
+        {/* series */}<path d={path(histActualPts)} fill="none" stroke="#000" strokeWidth={1.8}/>
+        <path d={path(futActualPts)}  fill="none" stroke="#000" strokeWidth={2.4} strokeDasharray="4,6"/>
+                <path d={path(fvPts)}         fill="none" stroke={FV_COLOR} strokeWidth={2.4}/>
         <path d={path(lowPts)}        fill="none" stroke="#2ca02c" strokeWidth={1.8}/>
         <path d={path(highPts)}       fill="none" stroke="#2ca02c" strokeWidth={1.8}/>
 
