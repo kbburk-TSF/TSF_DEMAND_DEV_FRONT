@@ -1,12 +1,11 @@
 // src/tabs/ChartsTab.jsx
 // Minimal update — add Actuals line to existing chart and update legend (no other visual changes)
 //
-// What changed (10/24/2025):
-// - Draws a single black "Actuals (for comparison)" line using `value` across the full range.
-// - Uses a dotted stroke (dash pattern) for Actuals in both chart and legend.
-// - Legend label now reads: "Actuals (for comparison)".
+// What changed (2025-10-24):
+// - Draws a black dotted line for "Actuals (for comparison)" using `value` across the range.
+// - Legend includes "Actuals (for comparison)" with dotted swatch.
 //
-// Everything else (FV gold line, interval band, highs/lows, layout, queries) remains unchanged.
+// Everything else remains unchanged.
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
 import { listForecastIds, queryView } from "../api.js";
