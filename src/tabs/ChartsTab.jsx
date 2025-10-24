@@ -1,10 +1,8 @@
-// src/tabs/ChartsTab.jsx
-// Derived from DashboardTab2.jsx — Pre-roll removed only (2025-10-24)
-// CHANGES (only these):
-// 1) startIdx = 0 (was 7) — no pre-roll gating
-// 2) Removed shaded pre-roll <rect> blocks
-// 3) Query range starts at selected month start (no 7-day pre-offset)
-// Nothing else modified (legends, colors, labels, structure preserved).
+// src/tabs/DashboardTab2.jsx
+// Derived from DashboardTab.jsx (2025-09-27):
+// - Shows only Chart 1 (Classical) and Chart 3 (Gold Line & Green Zone).
+// - Uses the exact same configurations, sizing, legends, and shared Y-axis domain logic.
+// - Historical actuals on all charts; bottom legend excludes High/Low items.
 
 import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
 
@@ -80,7 +78,7 @@ function useChartMath(rows){
   const H = Math.max(220, Math.min(340, Math.round(W * 0.22))); // shorter responsive height (same as DashboardTab)
   const pad = { top: 28, right: 24, bottom: 72, left: 70 };
   const N = (rows||[]).length;
-  const startIdx = 0; // PRE-ROLL REMOVED
+  const startIdx = 0; // preroll removed
 
   const innerW = Math.max(1, W - pad.left - pad.right);
   const innerH = Math.max(1, H - pad.top - pad.bottom);
@@ -152,7 +150,6 @@ function MultiClassicalChart({ rows, yDomain }){
   const yScale = v => pad.top + innerH * (1 - ((v - Y0) / Math.max(1e-9, (Y1 - Y0))));
   const path = pts => pts.length ? pts.map((p,i)=>(i?"L":"M")+xScale(p.i)+" "+yScale(p.y)).join(" ") : "";
 
-  // PRE-ROLL REMOVED: keep series definitions; "Historical Values" will be empty because startIdx=0
   const histActualPts = rows.map((r,i) => (r.value!=null && i < startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
   const futActualPts  = rows.map((r,i) => (r.value!=null && i >= startIdx) ? { i, y:Number(r.value) } : null).filter(Boolean);
   const makePts = (field) => rows.map((r,i) => (r[field]!=null && i >= startIdx) ? { i, y:Number(r[field]) } : null).filter(Boolean);
@@ -185,7 +182,7 @@ function MultiClassicalChart({ rows, yDomain }){
             <text x={pad.left-10} y={yScale(v)+4} fontSize="11" fill="#666" textAnchor="end">{v}</text>
           </g>
         ))}
-        {/* PRE-ROLL SHADE REMOVED */}
+        
         <path d={path(histActualPts)} fill="none" stroke="#000" strokeWidth={1.8}/>
         <path d={path(futActualPts)}  fill="none" stroke="#000" strokeWidth={2.4} strokeDasharray="4,6"/>
         <path d={path(arimaPts)}      fill="none" stroke={C_ARIMA} strokeWidth={2.4}/>
@@ -234,8 +231,7 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
   const band90Top = rows.map((r,i) => (r.ci90_low!=null && r.ci90_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci90_high))] : null).filter(Boolean);
   const band90Bot = rows.map((r,i) => (r.ci90_low!=null && r.ci90_high!=null && i >= startIdx) ? [xScale(i), yScale(Number(r.ci90_low))]  : null).filter(Boolean).reverse();
   const polyStr90 = [...band90Top, ...band90Bot].map(([x,y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
-
-  // ci95 boundary line points
+// ci95 boundary line points
   const ci95HighPts = rows.map((r,i)=>(r.ci95_high!=null && i >= startIdx) ? { i, y:Number(r.ci95_high) } : null).filter(Boolean);
   const ci95LowPts  = rows.map((r,i)=>(r.ci95_low !=null && i >= startIdx) ? { i, y:Number(r.ci95_low)  } : null).filter(Boolean);
   const ci90HighPts = rows.map((r,i)=>(r.ci90_high!=null && i >= startIdx) ? { i, y:Number(r.ci90_high) } : null).filter(Boolean);
@@ -243,7 +239,7 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
   const yTicks = niceTicks(Y0, Y1, 6);
 
   const intervalFill = "rgba(144,238,144,0.22)";
-  const intervalFill90 = "rgba(46, 204, 113, 0.32)";
+const intervalFill90 = "rgba(46, 204, 113, 0.32)";
   const fvColor = "#FFD700";
 
   const legendItems = [
@@ -251,7 +247,7 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
     { label: "Actuals (for comparison)", type: "line", stroke:"#000", dash:"4,6", width:2.4 },
     { label: "Targeted Seasonal Forecast", type: "line", stroke:fvColor, dash:null, width:2.4 },
     { label: "95% Confidence Interval", type: "box", fill:intervalFill, stroke:"#2ca02c" },
-    { label: "85% Confidence Interval", type: "box", fill:"rgba(46, 204, 113, 0.60)", stroke:"#2ca02c" },
+{ label: "85% Confidence Interval", type: "box", fill:"rgba(46, 204, 113, 0.60)", stroke:"#2ca02c" },
   ];
 
   return (
@@ -265,13 +261,13 @@ function GoldAndGreenZoneChart({ rows, yDomain }){
             <text x={pad.left-10} y={yScale(v)+4} fontSize="11" fill="#666" textAnchor="end">{v}</text>
           </g>
         ))}
-        {/* PRE-ROLL SHADE REMOVED */}
+        
         {polyStr && <polygon points={polyStr} fill={intervalFill} stroke="none" />}
-        {polyStr90 && <polygon points={polyStr90} fill={intervalFill90} stroke="none" />}
-        <path d={path(ci95HighPts)} fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
-        <path d={path(ci95LowPts)}  fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
-        <path d={path(ci90HighPts)} fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
-        <path d={path(ci90LowPts)}  fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
+{polyStr90 && <polygon points={polyStr90} fill={intervalFill90} stroke="none" />}
+<path d={path(ci95HighPts)} fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
+<path d={path(ci95LowPts)}  fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
+<path d={path(ci90HighPts)} fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
+<path d={path(ci90LowPts)}  fill="none" stroke="#0f5c1a" strokeWidth={1.6}/>
         <path d={path(histActualPts)} fill="none" stroke="#000" strokeWidth={1.8}/>
         <path d={path(futActualPts)}  fill="none" stroke="#000" strokeWidth={2.4} strokeDasharray="4,6"/>
         <path d={path(fvPts)}         fill="none" stroke={fvColor} strokeWidth={2.4}/>
@@ -299,7 +295,7 @@ function ChartSection({ title, children, mt=16 }){
   );
 }
 
-export default function ChartsTab(){
+export default function DashboardTab2(){
   const [ids, setIds] = useState([]);
   const [forecastId, setForecastId] = useState("");
   const [allMonths, setAllMonths] = useState([]);
@@ -327,18 +323,18 @@ export default function ChartsTab(){
     (async () => {
       try {
         setStatus("Loading months…");
-        try {
-          const months = await listMonths(forecastId);
-          const __parseMonth = (m) => { const [y, mo] = String(m).split("-"); return Date.UTC(Number(y), Number(mo)-1, 1); };
-          const __sorted = (months||[]).slice().sort((a,b)=> __parseMonth(a) - __parseMonth(b));
-          const __last24 = __sorted.slice(-24);
-          setAllMonths(__last24);
-          if (__last24.length) setStartMonth(String(__last24[0]) + "-01");
-        } catch (e) {
-          setStatus(e?.message||String(e));
-        }
-        setStatus("");
-      } catch(e){ setStatus("Failed to scan dates: " + String(e.message||e)); }
+try {
+  const months = await listMonths(forecastId);
+  const __parseMonth = (m) => { const [y, mo] = String(m).split("-"); return Date.UTC(Number(y), Number(mo)-1, 1); };
+  const __sorted = (months||[]).slice().sort((a,b)=> __parseMonth(a) - __parseMonth(b));
+  const __last24 = __sorted.slice(-24);
+  setAllMonths(__last24);
+  if (__last24.length) setStartMonth(String(__last24[0]) + "-01");
+} catch (e) {
+  setError(e?.message||String(e));
+}
+setStatus("");
+} catch(e){ setStatus("Failed to scan dates: " + String(e.message||e)); }
     })();
   }, [forecastId]);
 
@@ -349,6 +345,7 @@ export default function ChartsTab(){
     try{
       setStatus("Loading…");
       const start = firstOfMonthUTC(parseYMD(startMonth));
+      const preRollStart = start;
       const end = lastOfMonthUTC(addMonthsUTC(start, monthsCount-1));
 
       const res = await __postQuery({ forecast_name:String(forecastId), month:String(startMonth).slice(0,7), span:Number(monthsCount) });
@@ -358,7 +355,6 @@ export default function ChartsTab(){
         if (!r || !r.date) continue;
         byDate.set(r.date, r);
       }
-      // PRE-ROLL REMOVED: start directly from selected month start
       const days = daysBetweenUTC(start, end);
       const strict = days.map(d => {
         const r = byDate.get(d) || {};
@@ -366,8 +362,7 @@ export default function ChartsTab(){
           date: d,
           value: r.value ?? null,
           fv: r.fv ?? null,
-          low: r.low ?? null,
-          ci95_low: r.ci95_low ?? null,
+          low: r.low ?? null,  ci95_low: r.ci95_low ?? null,
           ci95_high: r.ci95_high ?? null,
           ci90_low: r.ci85_low ?? null,
           ci90_high: r.ci85_high ?? null,
